@@ -1,53 +1,35 @@
 {% extends "base.html" %}
+{% import "games/_game_info.html" as info %}
 {% block title %}{{ game.name if game else "Jogo não encontrado" }} — Biblioteca de Jogos{% endblock %}
 {% block content %}
-<main class="game-detail">
-  <a class="game-detail__back" href="/">&larr; Voltar pra vitrine</a>
+<main class="spread">
+  <a class="spread__back" href="/">&larr; Voltar à coleção</a>
 
   {% if game %}
-  <div class="game-detail__layout">
-    <div class="game-detail__cover">
+  <div class="spread__layout">
+    <div class="spread__pocket">
       {% if game.cover_url %}
-      <img src="{{ game.cover_url }}" alt="">
+      <span class="media-backdrop" style="background-image:url('{{ game.cover_url }}')" aria-hidden="true"></span>
+      {% endif %}
+      <span class="card__flag" style="background:{{ platform_meta[game.platform].color }}">{{ platform_meta[game.platform].short }}</span>
+      {% if game.cover_url %}
+      <img class="spread__cover" src="{{ game.cover_url }}" alt="">
       {% else %}
-      <div class="game-detail__cover-placeholder" aria-hidden="true">{{ game.name[:1] | upper }}</div>
+      <div class="spread__cover spread__cover--placeholder" aria-hidden="true">{{ game.name[:1] | upper }}</div>
+      {% endif %}
+      {% if game.completion_status == 'completed' %}
+      <span class="card__foil" aria-hidden="true"></span>
       {% endif %}
     </div>
-    <div class="game-detail__info">
-      <h1 class="game-detail__title">{{ game.name }}</h1>
-
-      {% if error %}
-      <p class="game-detail__metadata-error">{{ error }}</p>
-      {% else %}
-      <dl class="game-detail__facts">
-        <div class="game-detail__fact">
-          <dt>Lançamento</dt>
-          <dd>{{ metadata.release_date | release_date }}</dd>
-        </div>
-        <div class="game-detail__fact">
-          <dt>Gênero</dt>
-          <dd>{{ metadata.genres | join(", ") if metadata.genres else "—" }}</dd>
-        </div>
-        <div class="game-detail__fact">
-          <dt>Avaliação</dt>
-          <dd class="game-detail__rating">{{ metadata.rating | rating_stars }}</dd>
-        </div>
-      </dl>
-      {% if metadata.video_url %}
-      <video class="game-detail__video" controls preload="none" poster="{{ game.cover_url or '' }}">
-        <source src="{{ metadata.video_url }}" type="video/mp4">
-        Seu navegador não suporta vídeo embutido.
-      </video>
-      {% else %}
-      <p class="game-detail__no-video">Trailer indisponível.</p>
-      {% endif %}
-      {% endif %}
+    <div class="spread__sheet">
+      <h1 class="spread__title">{{ game.name }}</h1>
+      {{ info.game_info(game, metadata, error, status_labels, "spread") }}
     </div>
   </div>
   {% else %}
-  <div class="game-detail__error">
-    <p class="game-detail__error-title">Não foi possível carregar este jogo.</p>
-    <p class="game-detail__error-hint">{{ error }}</p>
+  <div class="spread__error">
+    <p class="spread__error-title">Não foi possível carregar este jogo.</p>
+    <p class="spread__error-hint">{{ error }}</p>
   </div>
   {% endif %}
 </main>

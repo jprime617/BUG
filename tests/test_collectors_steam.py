@@ -27,7 +27,6 @@ def _settings() -> Settings:
         psn_npsso=None,
         xbox_openxbl_key=None,
         legendary_bin="legendary",
-        database_path="/tmp/unused.db",  # type: ignore[arg-type]
     )
 
 

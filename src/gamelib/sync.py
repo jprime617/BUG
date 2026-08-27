@@ -11,6 +11,8 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from supabase import Client
+
 from gamelib import db
 from gamelib.collectors.base import Collector, CollectorError
 from gamelib.config import Settings, load_settings
@@ -74,9 +76,10 @@ def run_sync(
     platforms: list[Platform] | None = None,
     settings: Settings | None = None,
     collectors: dict[Platform, Collector] | None = None,
+    client: Client | None = None,
 ) -> SyncReport:
     settings = settings or load_settings()
-    conn = db.connect(settings.database_path)
+    conn = client if client is not None else db.connect(settings)
     collectors = collectors if collectors is not None else _collectors()
     targets = platforms or list(collectors)
 

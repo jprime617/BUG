@@ -4,37 +4,52 @@
   {% include "_stats.html" %}
 
   <form id="filters" class="filters" onsubmit="return false">
-    <label class="sr-only" for="q">Buscar por nome</label>
-    <input type="search" id="q" name="q" placeholder="Buscar por nome…" value="{{ filters.q }}" autocomplete="off">
+    <div class="filters__search">
+      <label class="sr-only" for="q">Buscar por nome</label>
+      <span class="filters__search-icon" aria-hidden="true">⌕</span>
+      <input type="search" id="q" name="q" placeholder="Buscar na coleção…" value="{{ filters.q }}" autocomplete="off">
+    </div>
 
-    <label class="sr-only" for="platform">Plataforma</label>
-    <select id="platform" name="platform">
-      <option value="">Todas as plataformas</option>
-      {% for p in platforms %}
-      <option value="{{ p }}" {{ "selected" if filters.platform == p else "" }}>{{ platform_meta[p].label }}</option>
-      {% endfor %}
-    </select>
+    <div class="filters__row">
+      <fieldset class="tab-strip">
+        <legend class="tab-strip__label">Plataforma</legend>
+        <div class="tab-strip__tabs">
+          <input class="tab-input sr-only" type="radio" id="platform-all" name="platform" value="" {{ "checked" if not filters.platform else "" }}>
+          <label class="tab" for="platform-all">Todas</label>
+          {% for p in platforms %}
+          <input class="tab-input sr-only" type="radio" id="platform-{{ p }}" name="platform" value="{{ p }}" {{ "checked" if filters.platform == p else "" }}>
+          <label class="tab" for="platform-{{ p }}" style="--tab-ink:{{ platform_meta[p].color }}">{{ platform_meta[p].label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
 
-    <label class="sr-only" for="status">Status</label>
-    <select id="status" name="status">
-      <option value="">Todos os status</option>
-      {% for key, label in status_labels.items() %}
-      <option value="{{ key }}" {{ "selected" if filters.status == key else "" }}>{{ label }}</option>
-      {% endfor %}
-    </select>
+      <fieldset class="pill-group">
+        <legend class="tab-strip__label">Status</legend>
+        <div class="pill-group__pills">
+          <input class="tab-input sr-only" type="radio" id="status-all" name="status" value="" {{ "checked" if not filters.status else "" }}>
+          <label class="pill" for="status-all">Todos</label>
+          {% for key, label in status_labels.items() %}
+          <input class="tab-input sr-only" type="radio" id="status-{{ key }}" name="status" value="{{ key }}" {{ "checked" if filters.status == key else "" }}>
+          <label class="pill" for="status-{{ key }}">{{ label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
 
-    <label class="sr-only" for="sort">Ordenar por</label>
-    <select id="sort" name="sort">
-      <option value="name" {{ "selected" if filters.sort == "name" else "" }}>Nome</option>
-      <option value="playtime" {{ "selected" if filters.sort == "playtime" else "" }}>Tempo jogado</option>
-      <option value="last_played" {{ "selected" if filters.sort == "last_played" else "" }}>Jogado recentemente</option>
-      <option value="platform" {{ "selected" if filters.sort == "platform" else "" }}>Plataforma</option>
-    </select>
+      <div class="filters__sort">
+        <label for="sort">Ordenar</label>
+        <select id="sort" name="sort">
+          <option value="name" {{ "selected" if filters.sort == "name" else "" }}>Nome</option>
+          <option value="playtime" {{ "selected" if filters.sort == "playtime" else "" }}>Tempo jogado</option>
+          <option value="last_played" {{ "selected" if filters.sort == "last_played" else "" }}>Jogado recentemente</option>
+          <option value="platform" {{ "selected" if filters.sort == "platform" else "" }}>Plataforma</option>
+        </select>
+      </div>
+    </div>
   </form>
 
   <div
     id="games-grid"
-    class="games-grid"
+    class="binder"
     hx-get="/partials/games"
     hx-include="#filters"
     hx-target="this"

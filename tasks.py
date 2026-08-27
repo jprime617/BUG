@@ -131,7 +131,7 @@ def import_nintendo(argv: list[str]) -> int:
         print(f"Falha na importacao: {exc}")
         return 1
 
-    conn = db.connect(settings.database_path)
+    conn = db.connect(settings)
     for game in games:
         db.upsert_game(conn, game)
     print(f"Importados {len(games)} jogo(s) da Nintendo a partir de {argv[0]}.")

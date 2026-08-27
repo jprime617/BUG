@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% import "_auth_form.html" as auth %}
+{% block title %}Entrar — Biblioteca de Jogos{% endblock %}
+{% block content %}
+{% call auth.auth_card("Entrar", "Acesso à coleção") %}
+  {% if info %}<p class="auth-info">{{ info }}</p>{% endif %}
+  {% if error %}<p class="auth-error">{{ error }}</p>{% endif %}
+  <form class="auth-form" method="post" action="/login">
+    <label class="auth-field">
+      <span>Email</span>
+      <input type="email" name="email" required autocomplete="email" autofocus>
+    </label>
+    <label class="auth-field">
+      <span>Senha</span>
+      <input type="password" name="password" required autocomplete="current-password">
+    </label>
+    <button type="submit" class="auth-submit">Entrar</button>
+  </form>
+  <p class="auth-links">
+    <a href="/esqueci-senha">Esqueci minha senha</a>
+    <span class="sep">·</span>
+    <a href="/registro">Criar conta</a>
+  </p>
+{% endcall %}
+{% endblock %}

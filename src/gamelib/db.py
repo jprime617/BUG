@@ -1,191 +1,125 @@
-"""Camada SQLite (stdlib, sem ORM). Schema em snake_case plural, índices em
-colunas de filtro/JOIN, `CREATE TABLE IF NOT EXISTS` (idempotente) — ver
-`.claude/rules/sql-architecture.md`.
+"""Camada Supabase Postgres (via supabase-py, PostgREST). Schema versionado
+em `supabase/schema.sql` — ver `.claude/rules/sql-architecture.md`. Mesma
+API pública de quando isto era SQLite: quem chama continua acessando campos
+por `row["nome"]`, sem mudança em `app.py`/templates além de `connect()`.
 """
 
 from __future__ import annotations
 
-import json
-import sqlite3
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import Any
 
+from supabase import Client
+
+from gamelib.config import Settings
 from gamelib.models import Game
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS games (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    platform TEXT NOT NULL,
-    external_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    cover_url TEXT,
-    playtime_minutes INTEGER,
-    last_played_at TEXT,
-    achievements_unlocked INTEGER,
-    achievements_total INTEGER,
-    completion_status TEXT NOT NULL DEFAULT 'unknown',
-    added_at TEXT,
-    raw_json TEXT NOT NULL DEFAULT '{}',
-    first_synced_at TEXT NOT NULL,
-    last_synced_at TEXT NOT NULL,
-    UNIQUE(platform, external_id)
-);
-CREATE INDEX IF NOT EXISTS idx_games_platform ON games(platform);
-CREATE INDEX IF NOT EXISTS idx_games_completion_status ON games(completion_status);
-
-CREATE TABLE IF NOT EXISTS game_metadata (
-    game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
-    release_date TEXT,
-    genres TEXT NOT NULL DEFAULT '[]',
-    rating REAL,
-    video_url TEXT,
-    fetched_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS sync_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    platform TEXT NOT NULL,
-    started_at TEXT NOT NULL,
-    finished_at TEXT,
-    status TEXT NOT NULL,
-    games_found INTEGER,
-    error_message TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_sync_runs_platform ON sync_runs(platform);
-"""
+from gamelib.supabase_client import get_service_client
 
 
-def connect(path: Path) -> sqlite3.Connection:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(SCHEMA)
-    return conn
+def connect(settings: Settings) -> Client:
+    return get_service_client(settings)
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def upsert_game(conn: sqlite3.Connection, game: Game) -> None:
-    now = _now()
-    conn.execute(
-        """
-        INSERT INTO games (
-            platform, external_id, name, cover_url, playtime_minutes,
-            last_played_at, achievements_unlocked, achievements_total,
-            completion_status, added_at, raw_json, first_synced_at, last_synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(platform, external_id) DO UPDATE SET
-            name=excluded.name,
-            cover_url=excluded.cover_url,
-            playtime_minutes=excluded.playtime_minutes,
-            last_played_at=excluded.last_played_at,
-            achievements_unlocked=excluded.achievements_unlocked,
-            achievements_total=excluded.achievements_total,
-            completion_status=excluded.completion_status,
-            added_at=excluded.added_at,
-            raw_json=excluded.raw_json,
-            last_synced_at=excluded.last_synced_at
-        """,
-        (
-            game.platform,
-            game.external_id,
-            game.name,
-            game.cover_url,
-            game.playtime_minutes,
-            game.last_played_at.isoformat() if game.last_played_at else None,
-            game.achievements_unlocked,
-            game.achievements_total,
-            game.completion_status,
-            game.added_at.isoformat() if game.added_at else None,
-            json.dumps(game.raw, ensure_ascii=False),
-            now,
-            now,
-        ),
-    )
-    conn.commit()
+def upsert_game(conn: Client, game: Game) -> None:
+    # `first_synced_at` fica de fora do payload de propósito: o PostgREST só
+    # faz SET das colunas presentes no corpo do upsert, então omiti-la
+    # preserva o valor original num conflito e deixa o DEFAULT now() do
+    # banco preencher só no insert — equivalente ao ON CONFLICT DO UPDATE
+    # SET explícito (sem first_synced_at) que isto tinha em SQLite.
+    payload = {
+        "platform": game.platform,
+        "external_id": game.external_id,
+        "name": game.name,
+        "cover_url": game.cover_url,
+        "playtime_minutes": game.playtime_minutes,
+        "last_played_at": game.last_played_at.isoformat() if game.last_played_at else None,
+        "achievements_unlocked": game.achievements_unlocked,
+        "achievements_total": game.achievements_total,
+        "completion_status": game.completion_status,
+        "added_at": game.added_at.isoformat() if game.added_at else None,
+        "raw_json": game.raw,
+        "last_synced_at": _now(),
+    }
+    conn.table("games").upsert(payload, on_conflict="platform,external_id").execute()
 
 
 def list_games(
-    conn: sqlite3.Connection,
+    conn: Client,
     platform: str | None = None,
     query: str | None = None,
     status: str | None = None,
     sort: str = "name",
-) -> list[sqlite3.Row]:
-    sql = "SELECT * FROM games WHERE 1=1"
-    params: list[Any] = []
+) -> list[dict]:
+    q = conn.table("games").select("*")
     if platform:
-        sql += " AND platform = ?"
-        params.append(platform)
+        q = q.eq("platform", platform)
     if status:
-        sql += " AND completion_status = ?"
-        params.append(status)
+        q = q.eq("completion_status", status)
     if query:
-        sql += " AND name LIKE ? COLLATE NOCASE"
-        params.append(f"%{query}%")
-    sort_columns = {
-        "name": "name COLLATE NOCASE ASC",
-        "playtime": "playtime_minutes DESC",
-        "last_played": "last_played_at DESC",
-        "platform": "platform ASC, name COLLATE NOCASE ASC",
-    }
-    sql += f" ORDER BY {sort_columns.get(sort, sort_columns['name'])}"
-    return conn.execute(sql, params).fetchall()
+        q = q.ilike("name", f"%{query}%")
+
+    if sort == "playtime":
+        q = q.order("playtime_minutes", desc=True)
+    elif sort == "last_played":
+        q = q.order("last_played_at", desc=True)
+    elif sort == "platform":
+        q = q.order("platform").order("name_sort")
+    else:
+        q = q.order("name_sort")
+
+    return q.execute().data
 
 
-def get_game(conn: sqlite3.Connection, game_id: int) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM games WHERE id = ?", (game_id,)).fetchone()
+def get_game(conn: Client, game_id: int) -> dict | None:
+    return conn.table("games").select("*").eq("id", game_id).maybe_single().execute().data
 
 
-def get_game_metadata(conn: sqlite3.Connection, game_id: int) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM game_metadata WHERE game_id = ?", (game_id,)).fetchone()
+def get_game_metadata(conn: Client, game_id: int) -> dict | None:
+    return (
+        conn.table("game_metadata").select("*").eq("game_id", game_id).maybe_single().execute().data
+    )
 
 
 def upsert_game_metadata(
-    conn: sqlite3.Connection,
+    conn: Client,
     game_id: int,
     release_date: str | None,
     genres: list[str],
     rating: float | None,
-    video_url: str | None,
+    metacritic: int | None,
+    description: str | None,
+    screenshots: list[str],
 ) -> None:
-    conn.execute(
-        """
-        INSERT INTO game_metadata (game_id, release_date, genres, rating, video_url, fetched_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(game_id) DO UPDATE SET
-            release_date=excluded.release_date,
-            genres=excluded.genres,
-            rating=excluded.rating,
-            video_url=excluded.video_url,
-            fetched_at=excluded.fetched_at
-        """,
-        (game_id, release_date, json.dumps(genres, ensure_ascii=False), rating, video_url, _now()),
+    conn.table("game_metadata").upsert(
+        {
+            "game_id": game_id,
+            "release_date": release_date,
+            "genres": genres,
+            "rating": rating,
+            "metacritic": metacritic,
+            "description": description,
+            "screenshots": screenshots,
+            "fetched_at": _now(),
+        },
+        on_conflict="game_id",
+    ).execute()
+
+
+def get_stats(conn: Client) -> dict[str, Any]:
+    rows = (
+        conn.table("games").select("platform, completion_status, playtime_minutes").execute().data
     )
-    conn.commit()
-
-
-def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
-    total_games = conn.execute("SELECT COUNT(*) FROM games").fetchone()[0]
-    total_playtime = conn.execute(
-        "SELECT COALESCE(SUM(playtime_minutes), 0) FROM games"
-    ).fetchone()[0]
-    by_platform = {
-        row["platform"]: row["n"]
-        for row in conn.execute(
-            "SELECT platform, COUNT(*) AS n FROM games GROUP BY platform"
-        ).fetchall()
-    }
-    by_status = {
-        row["completion_status"]: row["n"]
-        for row in conn.execute(
-            "SELECT completion_status, COUNT(*) AS n FROM games GROUP BY completion_status"
-        ).fetchall()
-    }
+    total_games = len(rows)
+    total_playtime = sum(r.get("playtime_minutes") or 0 for r in rows)
+    by_platform: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    for r in rows:
+        by_platform[r["platform"]] = by_platform.get(r["platform"], 0) + 1
+        by_status[r["completion_status"]] = by_status.get(r["completion_status"], 0) + 1
     return {
         "total_games": total_games,
         "total_playtime_minutes": total_playtime,
@@ -195,7 +129,7 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
 
 
 def record_sync_run(
-    conn: sqlite3.Connection,
+    conn: Client,
     platform: str,
     started_at: datetime,
     finished_at: datetime,
@@ -203,27 +137,21 @@ def record_sync_run(
     games_found: int | None,
     error_message: str | None = None,
 ) -> None:
-    conn.execute(
-        """
-        INSERT INTO sync_runs
-            (platform, started_at, finished_at, status, games_found, error_message)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            platform,
-            started_at.isoformat(),
-            finished_at.isoformat(),
-            status,
-            games_found,
-            error_message,
-        ),
-    )
-    conn.commit()
+    conn.table("sync_runs").insert(
+        {
+            "platform": platform,
+            "started_at": started_at.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "status": status,
+            "games_found": games_found,
+            "error_message": error_message,
+        }
+    ).execute()
 
 
-def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+def row_to_dict(row: dict) -> dict[str, Any]:
     d = dict(row)
-    d["raw"] = json.loads(d.pop("raw_json") or "{}")
+    d["raw"] = d.pop("raw_json", None) or {}
     d["last_played_at"] = _parse_dt(d.get("last_played_at"))
     d["added_at"] = _parse_date(d.get("added_at"))
     return d

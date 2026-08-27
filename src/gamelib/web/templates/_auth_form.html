@@ -1,0 +1,9 @@
+{% macro auth_card(title, eyebrow) %}
+<main class="auth-page">
+  <div class="auth-card">
+    <p class="eyebrow">{{ eyebrow }}</p>
+    <h1 class="auth-card__title">{{ title }}</h1>
+    {{ caller() }}
+  </div>
+</main>
+{% endmacro %}

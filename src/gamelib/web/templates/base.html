@@ -6,11 +6,37 @@
   <title>{% block title %}Biblioteca de Jogos{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@6..12,500;6..12,600;6..12,700;6..12,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
 </head>
 <body>
   {% block content %}{% endblock %}
+
+  <dialog id="game-modal" class="game-modal">
+    <button type="button" class="game-modal__close" aria-label="Fechar" data-modal-close>&times;</button>
+    <div id="game-modal-content" class="game-modal__content"></div>
+  </dialog>
+
+  <template id="game-modal-skeleton">
+    <div class="game-modal__layout" aria-busy="true" aria-live="polite">
+      <div class="game-modal__pocket">
+        <span class="skeleton-block game-modal__skeleton-cover"></span>
+      </div>
+      <div class="game-modal__sheet">
+        <span class="skeleton-block game-modal__skeleton-title"></span>
+        <span class="skeleton-block game-modal__skeleton-meta"></span>
+        <span class="skeleton-block game-modal__skeleton-scores"></span>
+        <span class="skeleton-block game-modal__skeleton-line"></span>
+        <span class="skeleton-block game-modal__skeleton-line"></span>
+        <span class="skeleton-block game-modal__skeleton-line game-modal__skeleton-line--short"></span>
+        <div class="game-modal__skeleton-gallery">
+          <span class="skeleton-block"></span>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="/static/game-modal.js" defer></script>
 </body>
 </html>

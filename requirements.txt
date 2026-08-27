@@ -1,0 +1,13 @@
+# Espelha [project.dependencies] em pyproject.toml — gerado à mão porque o
+# suporte do builder da Vercel a pyproject.toml é inconsistente entre
+# versões (confirmar em https://vercel.com/docs/functions/runtimes/python
+# antes de mudar isso). uvicorn não é necessário aqui: a Vercel invoca o
+# app ASGI direto via api/index.py, sem servidor próprio.
+fastapi>=0.110
+jinja2>=3.1
+httpx>=0.27
+python-dotenv>=1.0
+PSNAWP>=2.0
+supabase>=2.4
+cryptography>=42
+python-multipart>=0.0.9

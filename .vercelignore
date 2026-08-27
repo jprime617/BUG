@@ -1,0 +1,10 @@
+.venv/
+data/
+tests/
+.git/
+.pytest_cache/
+.ruff_cache/
+repomix-map.txt
+repomix-output.txt
+docs/
+*.md

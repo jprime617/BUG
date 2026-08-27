@@ -27,7 +27,6 @@ def _settings(rawg_api_key: str | None = None) -> Settings:
         psn_npsso=None,
         xbox_openxbl_key=None,
         legendary_bin="legendary",
-        database_path="/tmp/unused.db",  # type: ignore[arg-type]
         rawg_api_key=rawg_api_key,
     )
 

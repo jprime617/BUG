@@ -1,0 +1,55 @@
+{% macro game_info(game, metadata, error, status_labels, prefix) %}
+<p class="{{ prefix }}__meta">
+  {{ game.playtime_minutes | playtime }} jogadas
+  · {{ game.achievements_unlocked | achievements(game.achievements_total) }}
+  · <span class="card__status card__status--{{ game.completion_status }}">{{ status_labels[game.completion_status] }}</span>
+</p>
+
+{% if error %}
+<p class="{{ prefix }}__metadata-error">{{ error }}</p>
+{% else %}
+<div class="{{ prefix }}__scores">
+  <span class="{{ prefix }}__score-chip {{ prefix }}__score-chip--{{ metadata.metacritic | metacritic_tier }}">
+    <span class="{{ prefix }}__score-value">{{ metadata.metacritic if metadata.metacritic is not none else "—" }}</span>
+    <span class="{{ prefix }}__score-label">Metacritic</span>
+  </span>
+  <span class="{{ prefix }}__rating" title="Avaliação dos jogadores (RAWG)">{{ metadata.rating | rating_stars }}</span>
+</div>
+
+<dl class="{{ prefix }}__facts">
+  <div class="{{ prefix }}__fact">
+    <dt>Lançamento</dt>
+    <dd>{{ metadata.release_date | release_date }}</dd>
+  </div>
+  <div class="{{ prefix }}__fact">
+    <dt>Gênero</dt>
+    <dd>{{ metadata.genres | join(", ") if metadata.genres else "—" }}</dd>
+  </div>
+</dl>
+
+<p class="{{ prefix }}__description">{{ metadata.description or "Sem sinopse disponível." }}</p>
+
+{% if metadata.screenshots %}
+<div class="gallery-carousel">
+  <div class="gallery-viewport {{ prefix }}__gallery-viewport" aria-label="Capturas de tela">
+    {% for shot in metadata.screenshots %}
+    <a class="gallery-slide{{ ' is-active' if loop.first else '' }}" href="{{ shot }}" target="_blank" rel="noopener">
+      <img src="{{ shot }}" alt="Captura de tela {{ loop.index }} de {{ loop.length }}" loading="lazy">
+    </a>
+    {% endfor %}
+    {% if metadata.screenshots | length > 1 %}
+    <button type="button" class="gallery-nav gallery-nav--prev" data-gallery-prev aria-label="Foto anterior">‹</button>
+    <button type="button" class="gallery-nav gallery-nav--next" data-gallery-next aria-label="Próxima foto">›</button>
+    {% endif %}
+  </div>
+  {% if metadata.screenshots | length > 1 %}
+  <div class="gallery-dots">
+    {% for shot in metadata.screenshots %}
+    <button type="button" class="gallery-dot{{ ' is-active' if loop.first else '' }}" data-gallery-dot aria-label="Foto {{ loop.index }}"></button>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endmacro %}

@@ -1,38 +1,37 @@
-<section id="stats" class="stats">
-  <div class="stats__top">
+<section id="stats" class="cover">
+  <div class="cover__row">
     <div>
-      <p class="eyebrow">Biblioteca</p>
-      <h1 class="stats__title">{{ stats.total_games }} jogo{{ 's' if stats.total_games != 1 else '' }}</h1>
-      <p class="stats__subtitle">{{ stats.total_playtime_minutes | playtime }} jogadas no total</p>
+      <p class="eyebrow">Coleção pessoal</p>
+      <h1 class="cover__title">Biblioteca de Jogos</h1>
+      <p class="cover__subtitle">{{ stats.total_games }} jogo{{ 's' if stats.total_games != 1 else '' }} arquivado{{ 's' if stats.total_games != 1 else '' }} · {{ stats.total_playtime_minutes | playtime }} jogadas no total</p>
     </div>
     <button
       id="sync-btn"
-      class="btn btn--primary"
+      class="sync-btn"
       hx-post="/sync"
       hx-target="#stats"
       hx-swap="outerHTML"
       hx-disabled-elt="this"
     >
-      <span class="btn__label">Sincronizar</span>
-      <span class="btn__loading htmx-indicator">Sincronizando…</span>
+      <span class="sync-btn__label">Sincronizar</span>
+      <span class="sync-btn__loading htmx-indicator">Sincronizando…</span>
     </button>
   </div>
 
   {% if composition %}
-  <div class="composition" role="img" aria-label="Distribuição da biblioteca por plataforma">
-    {% for seg in composition %}
-    <span
-      class="composition__seg"
-      style="width:{{ seg.pct }}%;background:{{ seg.color }}"
-      title="{{ seg.label }}: {{ seg.count }} jogo(s)"
-    ></span>
-    {% endfor %}
+  <div class="gauge" role="img" aria-label="Distribuição da coleção por plataforma">
+    <p class="gauge__label">Composição do acervo</p>
+    <div class="gauge__track">
+      {% for seg in composition %}
+      <span class="gauge__seg" style="width:{{ seg.pct }}%; background:{{ seg.color }}"></span>
+      {% endfor %}
+    </div>
+    <div class="gauge__legend">
+      {% for seg in composition %}
+      <span class="gauge__legend-item"><span class="dot" style="background:{{ seg.color }}"></span>{{ seg.label }} <b>{{ seg.pct }}%</b></span>
+      {% endfor %}
+    </div>
   </div>
-  <ul class="composition-legend">
-    {% for seg in composition %}
-    <li><span class="dot" style="background:{{ seg.color }}"></span>{{ seg.label }} · {{ seg.count }}</li>
-    {% endfor %}
-  </ul>
   {% else %}
   <p class="empty-hint">Nenhum jogo importado ainda. Sincronize ou importe o CSV da Nintendo (<code>python tasks.py import-nintendo &lt;csv&gt;</code>).</p>
   {% endif %}

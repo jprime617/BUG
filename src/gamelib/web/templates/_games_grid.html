@@ -1,28 +1,46 @@
 {% if games %}
   {% for g in games %}
-  <a class="card" href="/games/{{ g.id }}" style="--spine:{{ platform_meta[g.platform].color }}">
-    <span class="card__facet" aria-hidden="true"></span>
-    <div class="card__cover">
+  <a
+    class="card card--{{ g.completion_status }}"
+    href="/games/{{ g.id }}"
+    hx-get="/games/{{ g.id }}/modal"
+    hx-target="#game-modal-content"
+    hx-swap="innerHTML"
+  >
+    <span class="card__pocket">
       {% if g.cover_url %}
-      <img src="{{ g.cover_url }}" alt="" loading="lazy">
-      {% else %}
-      <div class="card__cover-placeholder" aria-hidden="true">{{ g.name[:1] | upper }}</div>
+      <span class="media-backdrop" style="background-image:url('{{ g.cover_url }}')" aria-hidden="true"></span>
       {% endif %}
-      <span class="card__status card__status--{{ g.completion_status }}"{% if g.platform != "nintendo" and g.completion_status != "unknown" %} title="Estimado a partir de tempo jogado/conquistas — não reportado pela plataforma"{% endif %}>{{ status_labels[g.completion_status] }}</span>
-    </div>
-    <div class="card__body">
-      <h3 class="card__name">{{ g.name }}</h3>
-      <p class="card__meta">
-        <span class="tag" style="color:{{ platform_meta[g.platform].color }}">{{ platform_meta[g.platform].label }}</span>
-        <span class="card__time">{{ g.playtime_minutes | playtime }}</span>
-      </p>
-      <p class="card__achievements">{{ g.achievements_unlocked | achievements(g.achievements_total) }}</p>
-    </div>
+      <span class="card__flag" style="background:{{ platform_meta[g.platform].color }}">{{ platform_meta[g.platform].short }}</span>
+      {% if g.cover_url %}
+      <img class="card__cover" src="{{ g.cover_url }}" alt="" loading="lazy">
+      {% else %}
+      <span class="card__cover card__cover--placeholder" aria-hidden="true">{{ g.name[:1] | upper }}</span>
+      {% endif %}
+      {% if g.completion_status == 'completed' %}
+      <span class="card__foil" aria-hidden="true"></span>
+      {% endif %}
+      {% if g.completion_status == 'playing' %}
+      <span class="card__fold" aria-hidden="true"></span>
+      {% endif %}
+    </span>
+    <span class="card__body">
+      <span class="card__title">{{ g.name }}</span>
+      <span class="card__stats">
+        <span>{{ g.playtime_minutes | playtime }}</span>
+        <span class="sep">·</span>
+        <span>{{ g.achievements_unlocked | achievements(g.achievements_total) }}</span>
+      </span>
+    </span>
+    <span
+      class="card__status card__status--{{ g.completion_status }}"
+      {% if g.platform != "nintendo" and g.completion_status != "unknown" %} title="Estimado a partir de tempo jogado/conquistas — não reportado pela plataforma"{% endif %}
+    >{{ status_labels[g.completion_status] }}</span>
   </a>
   {% endfor %}
 {% else %}
-  <div class="empty-state">
-    <p class="empty-state__title">Nenhum jogo encontrado</p>
-    <p class="empty-state__hint">Ajuste os filtros ou rode uma sincronização para popular a biblioteca.</p>
+  <div class="empty">
+    <p class="empty__title">Nenhuma carta nesta página do álbum</p>
+    <p class="empty__hint">Ajuste os filtros ou rode uma sincronização para popular a coleção.</p>
   </div>
 {% endif %}

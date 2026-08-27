@@ -23,14 +23,14 @@ def _patch_client(monkeypatch, handler) -> None:
 
 
 def _patch_rawg(
-    monkeypatch, search_results: list[dict], movies_by_id: dict[int, list[dict]] | None = None
+    monkeypatch, search_results: list[dict], detail_by_id: dict[int, dict] | None = None
 ):
-    movies_by_id = movies_by_id or {}
+    detail_by_id = detail_by_id or {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/movies"):
-            game_id = int(request.url.path.split("/")[-2])
-            return httpx.Response(200, json={"results": movies_by_id.get(game_id, [])})
+        tail = request.url.path.rsplit("/", 1)[-1]
+        if tail.isdigit():
+            return httpx.Response(200, json=detail_by_id.get(int(tail), {}))
         return httpx.Response(200, json={"results": search_results})
 
     _patch_client(monkeypatch, handler)
@@ -38,7 +38,7 @@ def _patch_rawg(
 
 def test_busca_e_persiste_metadados_na_primeira_chamada(monkeypatch, db_conn):
     db.upsert_game(db_conn, Game(platform="steam", external_id="1", name="Hades"))
-    game_id = db_conn.execute("SELECT id FROM games").fetchone()["id"]
+    game_id = db.list_games(db_conn)[0]["id"]
 
     _patch_rawg(
         monkeypatch,
@@ -48,9 +48,14 @@ def test_busca_e_persiste_metadados_na_primeira_chamada(monkeypatch, db_conn):
                 "released": "2020-09-17",
                 "genres": [{"name": "Indie"}, {"name": "Action"}],
                 "rating": 4.5,
+                "metacritic": 93,
+                "short_screenshots": [
+                    {"image": "https://example.com/1.jpg"},
+                    {"image": "https://example.com/2.jpg"},
+                ],
             }
         ],
-        movies_by_id={42: [{"data": {"max": "https://example.com/trailer.mp4"}}]},
+        detail_by_id={42: {"description_raw": "Uma jornada pelo submundo."}},
     )
 
     metadata = get_or_fetch_metadata(db_conn, game_id, "Hades", RAWG_KEY)
@@ -58,17 +63,58 @@ def test_busca_e_persiste_metadados_na_primeira_chamada(monkeypatch, db_conn):
     assert metadata.release_date == "2020-09-17"
     assert metadata.genres == ["Indie", "Action"]
     assert metadata.rating == 4.5
-    assert metadata.video_url == "https://example.com/trailer.mp4"
+    assert metadata.metacritic == 93
+    assert metadata.description == "Uma jornada pelo submundo."
+    assert metadata.screenshots == ["https://example.com/1.jpg", "https://example.com/2.jpg"]
 
     row = db.get_game_metadata(db_conn, game_id)
     assert row is not None
     assert row["release_date"] == "2020-09-17"
 
 
+def test_falha_ao_buscar_sinopse_nao_impede_outros_metadados(monkeypatch, db_conn):
+    db.upsert_game(db_conn, Game(platform="steam", external_id="1", name="Hades"))
+    game_id = db.list_games(db_conn)[0]["id"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        tail = request.url.path.rsplit("/", 1)[-1]
+        if tail.isdigit():
+            return httpx.Response(500)
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 42,
+                        "released": "2020-09-17",
+                        "genres": [{"name": "Indie"}],
+                        "rating": 4.5,
+                        "metacritic": 93,
+                    }
+                ]
+            },
+        )
+
+    _patch_client(monkeypatch, handler)
+
+    metadata = get_or_fetch_metadata(db_conn, game_id, "Hades", RAWG_KEY)
+
+    assert metadata.description is None
+    assert metadata.release_date == "2020-09-17"
+    assert metadata.metacritic == 93
+
+
 def test_segunda_chamada_usa_cache_sem_bater_na_api(monkeypatch, db_conn):
     game_id = 1
     db.upsert_game_metadata(
-        db_conn, game_id, release_date="2019-01-01", genres=["RPG"], rating=4.0, video_url=None
+        db_conn,
+        game_id,
+        release_date="2019-01-01",
+        genres=["RPG"],
+        rating=4.0,
+        metacritic=None,
+        description=None,
+        screenshots=[],
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -85,11 +131,17 @@ def test_segunda_chamada_usa_cache_sem_bater_na_api(monkeypatch, db_conn):
 def test_cache_expirado_busca_de_novo(monkeypatch, db_conn):
     game_id = 1
     db.upsert_game_metadata(
-        db_conn, game_id, release_date="2019-01-01", genres=["RPG"], rating=4.0, video_url=None
+        db_conn,
+        game_id,
+        release_date="2019-01-01",
+        genres=["RPG"],
+        rating=4.0,
+        metacritic=None,
+        description=None,
+        screenshots=[],
     )
     old = (datetime.now(UTC) - timedelta(days=31)).isoformat()
-    db_conn.execute("UPDATE game_metadata SET fetched_at = ? WHERE game_id = ?", (old, game_id))
-    db_conn.commit()
+    db_conn._data["game_metadata"][0]["fetched_at"] = old
 
     _patch_rawg(
         monkeypatch,

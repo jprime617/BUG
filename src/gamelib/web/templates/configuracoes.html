@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Configurações — Biblioteca de Jogos{% endblock %}
+{% block content %}
+<main class="page">
+  <p class="eyebrow">Administração</p>
+  <h1 class="cover__title">Configurações</h1>
+  <p class="cover__subtitle">Chaves de integração — ficam cifradas no banco, nunca no repositório ou no `.env` publicado.</p>
+
+  {% if saved %}<p class="auth-info settings-saved">Configurações salvas.</p>{% endif %}
+
+  <form class="settings-form" method="post" action="/configuracoes">
+    {% for f in fields %}
+    <div class="settings-field">
+      <div class="settings-field__header">
+        <label for="{{ f.key }}">{{ f.label }}</label>
+        {% if f.configured %}
+        <span class="settings-field__status settings-field__status--ok">configurado · {{ f.masked }}</span>
+        {% else %}
+        <span class="settings-field__status settings-field__status--missing">não configurado — preencha abaixo</span>
+        {% endif %}
+      </div>
+      <div class="settings-field__row">
+        <input
+          type="password"
+          id="{{ f.key }}"
+          name="{{ f.key }}"
+          placeholder="{{ 'deixe em branco para manter o valor atual' if f.configured else 'cole a chave aqui' }}"
+          autocomplete="off"
+        >
+        <button
+          type="button"
+          class="settings-test-btn"
+          hx-post="/configuracoes/testar/{{ f.integration }}"
+          hx-target="#test-result-{{ f.key }}"
+          hx-swap="innerHTML"
+        >Testar conexão</button>
+      </div>
+      <div id="test-result-{{ f.key }}" class="settings-test-result"></div>
+    </div>
+    {% endfor %}
+    <button type="submit" class="auth-submit settings-submit">Salvar configurações</button>
+  </form>
+</main>
+{% endblock %}

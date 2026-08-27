@@ -1,9 +1,18 @@
 # Credenciais por plataforma
 
-Copie `env.example` para `.env` (nunca versione o `.env` real — já está no
-`.gitignore`). Cada plataforma é independente: preencha só as que quiser
-sincronizar. Sem as variáveis, `python tasks.py sync` pula a plataforma
-automaticamente (não é erro).
+**No sistema publicado (Vercel), as credenciais abaixo se preenchem pela
+tela `/configuracoes` (restrita ao admin) — não em `.env`.** O `.env` real
+só existe pra rodar localmente (`python tasks.py serve`); veja `env.example`
+pros nomes exatos, marcados como "fallback local". Independente de onde a
+credencial foi configurada, cada plataforma continua opcional — sem ela, a
+sincronização pula aquela plataforma automaticamente (não é erro).
+
+**Epic Games não tem versão hospedada.** A sincronização depende do CLI
+`legendary` instalado e autenticado interativamente na máquina — isso não
+roda em função serverless (sem filesystem persistente, sem sessão de
+terminal). Na Vercel a plataforma Epic sempre aparece como "pulado" no
+relatório de sync; pra sincronizar Epic, rode `python tasks.py sync`
+localmente.
 
 ## Steam (API oficial)
 

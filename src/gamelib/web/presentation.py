@@ -10,11 +10,11 @@ from datetime import date
 from gamelib.models import CompletionStatus, Platform
 
 PLATFORM_META: dict[Platform, dict[str, str]] = {
-    "steam": {"label": "Steam", "color": "#6fa8c9"},
-    "psn": {"label": "PlayStation", "color": "#8891e0"},
-    "xbox": {"label": "Xbox", "color": "#6fbf7f"},
-    "epic": {"label": "Epic Games", "color": "#b98ce8"},
-    "nintendo": {"label": "Nintendo", "color": "#e2685a"},
+    "steam": {"label": "Steam", "color": "#2f5a82", "short": "STEAM"},
+    "psn": {"label": "PlayStation", "color": "#3d4f9e", "short": "PSN"},
+    "xbox": {"label": "Xbox", "color": "#1f7a6c", "short": "XBOX"},
+    "epic": {"label": "Epic Games", "color": "#7a4f1f", "short": "EPIC"},
+    "nintendo": {"label": "Nintendo", "color": "#b23a5c", "short": "NSW"},
 }
 
 STATUS_LABELS: dict[CompletionStatus, str] = {
@@ -71,3 +71,14 @@ def format_rating_stars(rating: float | None) -> str:
         return "sem avaliação"
     full = max(0, min(5, round(rating)))
     return "★" * full + "☆" * (5 - full)
+
+
+def metacritic_tier(score: int | None) -> str:
+    """Convenção de cor do próprio Metacritic: verde/amarelo/vermelho por faixa."""
+    if score is None:
+        return "unknown"
+    if score >= 75:
+        return "high"
+    if score >= 50:
+        return "mid"
+    return "low"

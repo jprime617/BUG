@@ -1,48 +1,63 @@
 from __future__ import annotations
 
-from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from tests.fakes import FakeSupabaseClient
 
-from gamelib.db import connect, upsert_game
+from gamelib.db import list_games, upsert_game
 from gamelib.models import Game
 from gamelib.web.app import app
+from gamelib.web.deps import get_conn
+
+_FAKE_USER = SimpleNamespace(email="dono@example.com")
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch) -> TestClient:
-    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+def fake_client() -> FakeSupabaseClient:
+    return FakeSupabaseClient()
+
+
+@pytest.fixture
+def client(fake_client: FakeSupabaseClient, monkeypatch) -> TestClient:
+    # Estas rotas exigem sessão (middleware de auth) — este arquivo testa
+    # renderização de detalhe de jogo, não autenticação, então simula um
+    # usuário já logado direto no middleware (não passa por Depends).
     monkeypatch.setenv("RAWG_API_KEY", "fake-key")
-    return TestClient(app)
+    monkeypatch.setattr("gamelib.web.app.verify_session", lambda request: _FAKE_USER)
+    app.dependency_overrides[get_conn] = lambda: fake_client
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
-def _seed_game(tmp_path: Path) -> int:
-    conn = connect(tmp_path / "test.db")
-    upsert_game(conn, Game(platform="steam", external_id="1", name="Hades"))
-    game_id = conn.execute("SELECT id FROM games").fetchone()["id"]
-    conn.close()
-    return game_id
+def _seed_game(fake_client: FakeSupabaseClient) -> int:
+    upsert_game(fake_client, Game(platform="steam", external_id="1", name="Hades"))
+    return list_games(fake_client)[0]["id"]
 
 
-def _patch_rawg(monkeypatch, search_results: list[dict]) -> None:
+def _patch_rawg(
+    monkeypatch, search_results: list[dict], detail_by_id: dict[int, dict] | None = None
+) -> None:
+    detail_by_id = detail_by_id or {}
     real_client_cls = httpx.Client
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/movies"):
-            return httpx.Response(200, json={"results": []})
+        tail = request.url.path.rsplit("/", 1)[-1]
+        if tail.isdigit():
+            return httpx.Response(200, json=detail_by_id.get(int(tail), {}))
         return httpx.Response(200, json={"results": search_results})
 
-    def fake_client(*args, **kwargs):
+    def fake_httpx_client(*args, **kwargs):
         kwargs["transport"] = httpx.MockTransport(handler)
         return real_client_cls(*args, **kwargs)
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx, "Client", fake_httpx_client)
 
 
-def test_pagina_de_detalhe_renderiza_com_metadados(client, tmp_path, monkeypatch):
-    game_id = _seed_game(tmp_path)
+def test_pagina_de_detalhe_renderiza_com_metadados(client, fake_client, monkeypatch):
+    game_id = _seed_game(fake_client)
     _patch_rawg(
         monkeypatch,
         search_results=[
@@ -51,8 +66,10 @@ def test_pagina_de_detalhe_renderiza_com_metadados(client, tmp_path, monkeypatch
                 "released": "2020-09-17",
                 "genres": [{"name": "Indie"}, {"name": "Action"}],
                 "rating": 4.5,
+                "metacritic": 93,
             }
         ],
+        detail_by_id={42: {"description_raw": "Uma jornada pelo submundo."}},
     )
 
     resp = client.get(f"/games/{game_id}")
@@ -63,17 +80,20 @@ def test_pagina_de_detalhe_renderiza_com_metadados(client, tmp_path, monkeypatch
     assert "<title>Hades" in resp.text
     assert "setembro de 2020" in resp.text
     assert "Indie, Action" in resp.text
+    assert "93" in resp.text
+    assert "Uma jornada pelo submundo." in resp.text
 
 
-def test_pagina_de_detalhe_usa_cache_na_segunda_chamada(client, tmp_path, monkeypatch):
-    game_id = _seed_game(tmp_path)
+def test_pagina_de_detalhe_usa_cache_na_segunda_chamada(client, fake_client, monkeypatch):
+    game_id = _seed_game(fake_client)
     call_count = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal call_count
         call_count += 1
-        if request.url.path.endswith("/movies"):
-            return httpx.Response(200, json={"results": []})
+        tail = request.url.path.rsplit("/", 1)[-1]
+        if tail.isdigit():
+            return httpx.Response(200, json={"description_raw": "Sinopse."})
         return httpx.Response(
             200,
             json={"results": [{"id": 1, "released": "2020-01-01", "genres": [], "rating": 3.0}]},
@@ -90,7 +110,7 @@ def test_pagina_de_detalhe_usa_cache_na_segunda_chamada(client, tmp_path, monkey
     second = client.get(f"/games/{game_id}")
 
     assert first.status_code == second.status_code == 200
-    assert call_count == 2  # busca (1 chamada de search) na 1a; nenhuma na 2a (cache)
+    assert call_count == 2  # busca + detalhe na 1a; nenhuma na 2a (cache)
 
 
 def test_pagina_de_detalhe_jogo_inexistente_retorna_404(client):
@@ -101,9 +121,9 @@ def test_pagina_de_detalhe_jogo_inexistente_retorna_404(client):
 
 
 def test_pagina_de_detalhe_api_externa_fora_do_ar_mostra_erro_amigavel(
-    client, tmp_path, monkeypatch
+    client, fake_client, monkeypatch
 ):
-    game_id = _seed_game(tmp_path)
+    game_id = _seed_game(fake_client)
 
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("conexão recusada", request=request)
@@ -122,13 +142,17 @@ def test_pagina_de_detalhe_api_externa_fora_do_ar_mostra_erro_amigavel(
     assert "falha ao contatar" in resp.text.lower()
 
 
-def test_pagina_de_detalhe_sem_rawg_api_key_mostra_erro_amigavel(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+def test_pagina_de_detalhe_sem_rawg_api_key_mostra_erro_amigavel(fake_client, monkeypatch):
     monkeypatch.setenv("RAWG_API_KEY", "")
-    game_id = _seed_game(tmp_path)
+    monkeypatch.setattr("gamelib.web.app.verify_session", lambda request: _FAKE_USER)
+    game_id = _seed_game(fake_client)
+    app.dependency_overrides[get_conn] = lambda: fake_client
     client = TestClient(app)
 
-    resp = client.get(f"/games/{game_id}")
+    try:
+        resp = client.get(f"/games/{game_id}")
+    finally:
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     assert "rawg_api_key" in resp.text.lower()

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "_auth_form.html" as auth %}
+{% block title %}Criar conta — Biblioteca de Jogos{% endblock %}
+{% block content %}
+{% call auth.auth_card("Criar conta", "Acesso à coleção") %}
+  {% if error %}<p class="auth-error">{{ error }}</p>{% endif %}
+  <form class="auth-form" method="post" action="/registro">
+    <label class="auth-field">
+      <span>Email</span>
+      <input type="email" name="email" required autocomplete="email" autofocus>
+    </label>
+    <label class="auth-field">
+      <span>Senha</span>
+      <input type="password" name="password" required autocomplete="new-password" minlength="6">
+    </label>
+    <button type="submit" class="auth-submit">Criar conta</button>
+  </form>
+  <p class="auth-links">
+    <a href="/login">Já tenho conta</a>
+  </p>
+{% endcall %}
+{% endblock %}

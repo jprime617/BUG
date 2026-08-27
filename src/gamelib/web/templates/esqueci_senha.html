@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% import "_auth_form.html" as auth %}
+{% block title %}Recuperar senha — Biblioteca de Jogos{% endblock %}
+{% block content %}
+{% call auth.auth_card("Esqueci minha senha", "Recuperação de acesso") %}
+  {% if sent %}
+  <p class="auth-info">Se o email existir, enviamos um link de redefinição — confira sua caixa de entrada.</p>
+  <p class="auth-links"><a href="/login">Voltar para o login</a></p>
+  {% else %}
+  {% if error %}<p class="auth-error">{{ error }}</p>{% endif %}
+  <form class="auth-form" method="post" action="/esqueci-senha">
+    <label class="auth-field">
+      <span>Email</span>
+      <input type="email" name="email" required autocomplete="email" autofocus>
+    </label>
+    <button type="submit" class="auth-submit">Enviar link de recuperação</button>
+  </form>
+  <p class="auth-links"><a href="/login">Voltar para o login</a></p>
+  {% endif %}
+{% endcall %}
+{% endblock %}

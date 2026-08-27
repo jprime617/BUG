@@ -6,13 +6,12 @@ não tratada até a fronteira do endpoint).
 
 from __future__ import annotations
 
-import json
 import logging
-import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import httpx
+from supabase import Client
 
 from gamelib import db
 
@@ -32,42 +31,42 @@ class GameMetadata:
     release_date: str | None
     genres: list[str]
     rating: float | None
-    video_url: str | None
+    metacritic: int | None
+    description: str | None
+    screenshots: list[str]
 
 
-def _row_is_fresh(row: sqlite3.Row) -> bool:
+def _row_is_fresh(row: dict) -> bool:
     fetched = datetime.fromisoformat(row["fetched_at"])
     return datetime.now(UTC) - fetched <= CACHE_TTL
 
 
-def get_cached_metadata(conn: sqlite3.Connection, game_id: int) -> GameMetadata | None:
+def get_cached_metadata(conn: Client, game_id: int) -> GameMetadata | None:
     row = db.get_game_metadata(conn, game_id)
     if row is None or not _row_is_fresh(row):
         return None
     return GameMetadata(
         release_date=row["release_date"],
-        genres=list(json.loads(row["genres"])),
+        genres=list(row["genres"] or []),
         rating=row["rating"],
-        video_url=row["video_url"],
+        metacritic=row["metacritic"],
+        description=row["description"],
+        screenshots=list(row["screenshots"] or []),
     )
 
 
-def _fetch_trailer_url(client: httpx.Client, rawg_id: int, api_key: str) -> str | None:
+def _fetch_description(client: httpx.Client, rawg_id: int, api_key: str) -> str | None:
     try:
-        resp = client.get(f"{RAWG_BASE_URL}/{rawg_id}/movies", params={"key": api_key})
+        resp = client.get(f"{RAWG_BASE_URL}/{rawg_id}", params={"key": api_key})
     except httpx.HTTPError as exc:
-        log.debug("metadata: falha ao buscar trailer (RAWG id=%s): %s", rawg_id, exc)
+        log.debug("metadata: falha ao buscar sinopse (RAWG id=%s): %s", rawg_id, exc)
         return None
     if resp.status_code != 200:
         log.debug(
-            "metadata: busca de trailer (RAWG id=%s) retornou HTTP %d", rawg_id, resp.status_code
+            "metadata: busca de sinopse (RAWG id=%s) retornou HTTP %d", rawg_id, resp.status_code
         )
         return None
-    results = resp.json().get("results", [])
-    if not results:
-        return None
-    data = results[0].get("data") or {}
-    return data.get("max") or data.get("480") or results[0].get("preview")
+    return resp.json().get("description_raw") or None
 
 
 def fetch_metadata_from_rawg(client: httpx.Client, name: str, api_key: str) -> GameMetadata:
@@ -83,16 +82,24 @@ def fetch_metadata_from_rawg(client: httpx.Client, name: str, api_key: str) -> G
         raise MetadataError(f"jogo {name!r} não encontrado na RAWG")
 
     game = results[0]
+    background_image = game.get("background_image")
+    screenshots = [
+        shot["image"]
+        for shot in game.get("short_screenshots", [])
+        if shot.get("image") and shot["image"] != background_image
+    ]
     return GameMetadata(
         release_date=game.get("released"),
         genres=[g["name"] for g in game.get("genres", [])],
         rating=game.get("rating"),
-        video_url=_fetch_trailer_url(client, game["id"], api_key),
+        metacritic=game.get("metacritic"),
+        description=_fetch_description(client, game["id"], api_key),
+        screenshots=screenshots,
     )
 
 
 def get_or_fetch_metadata(
-    conn: sqlite3.Connection, game_id: int, game_name: str, rawg_api_key: str | None
+    conn: Client, game_id: int, game_name: str, rawg_api_key: str | None
 ) -> GameMetadata:
     """Cache-first: retorna do SQLite se fresco; senão busca na RAWG e persiste.
 
@@ -116,6 +123,8 @@ def get_or_fetch_metadata(
         release_date=metadata.release_date,
         genres=metadata.genres,
         rating=metadata.rating,
-        video_url=metadata.video_url,
+        metacritic=metadata.metacritic,
+        description=metadata.description,
+        screenshots=metadata.screenshots,
     )
     return metadata
