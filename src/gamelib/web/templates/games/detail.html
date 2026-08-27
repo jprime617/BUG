@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ game.name if game else "Jogo não encontrado" }} — Biblioteca de Jogos{% endblock %}
+{% block content %}
+<main class="game-detail">
+  <a class="game-detail__back" href="/">&larr; Voltar pra vitrine</a>
+
+  {% if game %}
+  <div class="game-detail__layout">
+    <div class="game-detail__cover">
+      {% if game.cover_url %}
+      <img src="{{ game.cover_url }}" alt="">
+      {% else %}
+      <div class="game-detail__cover-placeholder" aria-hidden="true">{{ game.name[:1] | upper }}</div>
+      {% endif %}
+    </div>
+    <div class="game-detail__info">
+      <h1 class="game-detail__title">{{ game.name }}</h1>
+
+      {% if error %}
+      <p class="game-detail__metadata-error">{{ error }}</p>
+      {% else %}
+      <dl class="game-detail__facts">
+        <div class="game-detail__fact">
+          <dt>Lançamento</dt>
+          <dd>{{ metadata.release_date | release_date }}</dd>
+        </div>
+        <div class="game-detail__fact">
+          <dt>Gênero</dt>
+          <dd>{{ metadata.genres | join(", ") if metadata.genres else "—" }}</dd>
+        </div>
+        <div class="game-detail__fact">
+          <dt>Avaliação</dt>
+          <dd class="game-detail__rating">{{ metadata.rating | rating_stars }}</dd>
+        </div>
+      </dl>
+      {% if metadata.video_url %}
+      <video class="game-detail__video" controls preload="none" poster="{{ game.cover_url or '' }}">
+        <source src="{{ metadata.video_url }}" type="video/mp4">
+        Seu navegador não suporta vídeo embutido.
+      </video>
+      {% else %}
+      <p class="game-detail__no-video">Trailer indisponível.</p>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="game-detail__error">
+    <p class="game-detail__error-title">Não foi possível carregar este jogo.</p>
+    <p class="game-detail__error-hint">{{ error }}</p>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

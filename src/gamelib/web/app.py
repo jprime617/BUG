@@ -117,14 +117,15 @@ def partial_games(
     )
 
 
-@app.get("/games/{game_id}/modal")
-def game_modal(request: Request, conn: Conn, game_id: int):
+@app.get("/games/{game_id}")
+def game_detail(request: Request, conn: Conn, game_id: int):
     row = db.get_game(conn, game_id)
     if row is None:
         return templates.TemplateResponse(
             request,
-            "games/_game_modal.html",
+            "games/detail.html",
             {"game": None, "metadata": None, "error": "Jogo não encontrado."},
+            status_code=404,
         )
 
     game = db.row_to_dict(row)
@@ -137,7 +138,7 @@ def game_modal(request: Request, conn: Conn, game_id: int):
 
     return templates.TemplateResponse(
         request,
-        "games/_game_modal.html",
+        "games/detail.html",
         {"game": game, "metadata": metadata, "error": error},
     )
 
