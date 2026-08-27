@@ -41,7 +41,7 @@ def _patch_rawg(monkeypatch, search_results: list[dict]) -> None:
     monkeypatch.setattr(httpx, "Client", fake_client)
 
 
-def test_modal_retorna_fragmento_html_com_metadados(client, tmp_path, monkeypatch):
+def test_pagina_de_detalhe_renderiza_com_metadados(client, tmp_path, monkeypatch):
     game_id = _seed_game(tmp_path)
     _patch_rawg(
         monkeypatch,
@@ -55,16 +55,17 @@ def test_modal_retorna_fragmento_html_com_metadados(client, tmp_path, monkeypatc
         ],
     )
 
-    resp = client.get(f"/games/{game_id}/modal")
+    resp = client.get(f"/games/{game_id}")
 
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
-    assert "Hades" in resp.text
+    assert "<html" in resp.text
+    assert "<title>Hades" in resp.text
     assert "setembro de 2020" in resp.text
     assert "Indie, Action" in resp.text
 
 
-def test_modal_usa_cache_na_segunda_chamada(client, tmp_path, monkeypatch):
+def test_pagina_de_detalhe_usa_cache_na_segunda_chamada(client, tmp_path, monkeypatch):
     game_id = _seed_game(tmp_path)
     call_count = 0
 
@@ -85,21 +86,23 @@ def test_modal_usa_cache_na_segunda_chamada(client, tmp_path, monkeypatch):
         lambda *a, **kw: real_client_cls(*a, **{**kw, "transport": httpx.MockTransport(handler)}),
     )
 
-    first = client.get(f"/games/{game_id}/modal")
-    second = client.get(f"/games/{game_id}/modal")
+    first = client.get(f"/games/{game_id}")
+    second = client.get(f"/games/{game_id}")
 
     assert first.status_code == second.status_code == 200
     assert call_count == 2  # busca (1 chamada de search) na 1a; nenhuma na 2a (cache)
 
 
-def test_modal_jogo_inexistente_retorna_fragmento_de_erro(client):
-    resp = client.get("/games/999/modal")
+def test_pagina_de_detalhe_jogo_inexistente_retorna_404(client):
+    resp = client.get("/games/999")
 
-    assert resp.status_code == 200
+    assert resp.status_code == 404
     assert "não encontrado" in resp.text.lower()
 
 
-def test_modal_api_externa_fora_do_ar_retorna_fragmento_de_erro(client, tmp_path, monkeypatch):
+def test_pagina_de_detalhe_api_externa_fora_do_ar_mostra_erro_amigavel(
+    client, tmp_path, monkeypatch
+):
     game_id = _seed_game(tmp_path)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -112,19 +115,20 @@ def test_modal_api_externa_fora_do_ar_retorna_fragmento_de_erro(client, tmp_path
         lambda *a, **kw: real_client_cls(*a, **{**kw, "transport": httpx.MockTransport(handler)}),
     )
 
-    resp = client.get(f"/games/{game_id}/modal")
+    resp = client.get(f"/games/{game_id}")
 
     assert resp.status_code == 200
-    assert "não foi possível carregar" in resp.text.lower()
+    assert "hades" in resp.text.lower()
+    assert "falha ao contatar" in resp.text.lower()
 
 
-def test_modal_sem_rawg_api_key_retorna_erro_amigavel(tmp_path, monkeypatch):
+def test_pagina_de_detalhe_sem_rawg_api_key_mostra_erro_amigavel(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("RAWG_API_KEY", "")
     game_id = _seed_game(tmp_path)
     client = TestClient(app)
 
-    resp = client.get(f"/games/{game_id}/modal")
+    resp = client.get(f"/games/{game_id}")
 
     assert resp.status_code == 200
     assert "rawg_api_key" in resp.text.lower()
