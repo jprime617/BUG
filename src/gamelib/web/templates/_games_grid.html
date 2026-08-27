@@ -1,16 +1,7 @@
 {% if games %}
   {% for g in games %}
-  <article
-    class="card"
-    style="--spine:{{ platform_meta[g.platform].color }}"
-    role="button"
-    tabindex="0"
-    aria-haspopup="dialog"
-    hx-get="/games/{{ g.id }}/modal"
-    hx-target="#game-modal-content"
-    hx-swap="innerHTML"
-    hx-trigger="click, keyup[key=='Enter']"
-  >
+  <a class="card" href="/games/{{ g.id }}" style="--spine:{{ platform_meta[g.platform].color }}">
+    <span class="card__facet" aria-hidden="true"></span>
     <div class="card__cover">
       {% if g.cover_url %}
       <img src="{{ g.cover_url }}" alt="" loading="lazy">
@@ -27,7 +18,7 @@
       </p>
       <p class="card__achievements">{{ g.achievements_unlocked | achievements(g.achievements_total) }}</p>
     </div>
-  </article>
+  </a>
   {% endfor %}
 {% else %}
   <div class="empty-state">
