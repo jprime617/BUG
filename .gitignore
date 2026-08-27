@@ -1,0 +1,24 @@
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+dist/
+build/
+repomix-map.txt
+repomix-output.txt
+*.log
+
+# Segredos e config local (env.example É versionado; .env real não)
+.env
+.env.*
+.claude/settings.local.json
+.pytest_cache/
+.ruff_cache/
+
+# Banco local do dashboard de jogos (dado pessoal, não versionado)
+data/
+
+# Lock files de editores de planilha (LibreOffice/Excel)
+.~lock.*#

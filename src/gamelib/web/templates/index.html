@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="page">
+  {% include "_stats.html" %}
+
+  <form id="filters" class="filters" onsubmit="return false">
+    <label class="sr-only" for="q">Buscar por nome</label>
+    <input type="search" id="q" name="q" placeholder="Buscar por nome…" value="{{ filters.q }}" autocomplete="off">
+
+    <label class="sr-only" for="platform">Plataforma</label>
+    <select id="platform" name="platform">
+      <option value="">Todas as plataformas</option>
+      {% for p in platforms %}
+      <option value="{{ p }}" {{ "selected" if filters.platform == p else "" }}>{{ platform_meta[p].label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="sr-only" for="status">Status</label>
+    <select id="status" name="status">
+      <option value="">Todos os status</option>
+      {% for key, label in status_labels.items() %}
+      <option value="{{ key }}" {{ "selected" if filters.status == key else "" }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="sr-only" for="sort">Ordenar por</label>
+    <select id="sort" name="sort">
+      <option value="name" {{ "selected" if filters.sort == "name" else "" }}>Nome</option>
+      <option value="playtime" {{ "selected" if filters.sort == "playtime" else "" }}>Tempo jogado</option>
+      <option value="last_played" {{ "selected" if filters.sort == "last_played" else "" }}>Jogado recentemente</option>
+      <option value="platform" {{ "selected" if filters.sort == "platform" else "" }}>Plataforma</option>
+    </select>
+  </form>
+
+  <div
+    id="games-grid"
+    class="games-grid"
+    hx-get="/partials/games"
+    hx-include="#filters"
+    hx-target="this"
+    hx-swap="innerHTML"
+    hx-trigger="change from:#filters, keyup changed delay:300ms from:#q, sync-done from:body"
+  >
+    {% include "_games_grid.html" %}
+  </div>
+</main>
+{% endblock %}

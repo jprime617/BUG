@@ -1,0 +1,20 @@
+{
+  "output": {
+    "filePath": "repomix-map.txt",
+    "style": "xml",
+    "removeComments": true,
+    "removeEmptyLines": true,
+    "topFilesLength": 5
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useCustomIgnore": true,
+    "customIgnore": [
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/venv/**",
+      "**/__pycache__/**",
+      "*.zip"
+    ]
+  }
+}

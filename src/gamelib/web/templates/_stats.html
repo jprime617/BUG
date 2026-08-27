@@ -1,0 +1,53 @@
+<section id="stats" class="stats">
+  <div class="stats__top">
+    <div>
+      <p class="eyebrow">Biblioteca</p>
+      <h1 class="stats__title">{{ stats.total_games }} jogo{{ 's' if stats.total_games != 1 else '' }}</h1>
+      <p class="stats__subtitle">{{ stats.total_playtime_minutes | playtime }} jogadas no total</p>
+    </div>
+    <button
+      id="sync-btn"
+      class="btn btn--primary"
+      hx-post="/sync"
+      hx-target="#stats"
+      hx-swap="outerHTML"
+      hx-disabled-elt="this"
+    >
+      <span class="btn__label">Sincronizar</span>
+      <span class="btn__loading htmx-indicator">Sincronizando…</span>
+    </button>
+  </div>
+
+  {% if composition %}
+  <div class="composition" role="img" aria-label="Distribuição da biblioteca por plataforma">
+    {% for seg in composition %}
+    <span
+      class="composition__seg"
+      style="width:{{ seg.pct }}%;background:{{ seg.color }}"
+      title="{{ seg.label }}: {{ seg.count }} jogo(s)"
+    ></span>
+    {% endfor %}
+  </div>
+  <ul class="composition-legend">
+    {% for seg in composition %}
+    <li><span class="dot" style="background:{{ seg.color }}"></span>{{ seg.label }} · {{ seg.count }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-hint">Nenhum jogo importado ainda. Sincronize ou importe o CSV da Nintendo (<code>python tasks.py import-nintendo &lt;csv&gt;</code>).</p>
+  {% endif %}
+
+  {% if sync_report %}
+  <div class="sync-report" role="status">
+    {% for r in sync_report.results %}
+    <span class="sync-report__item sync-report__item--{{ r.status }}">
+      {{ platform_meta[r.platform].label if r.platform in platform_meta else r.platform }}:
+      {%- if r.status == 'success' %} {{ r.games_found }} jogo(s)
+      {%- elif r.status == 'skipped' %} sem credenciais
+      {%- else %} falhou — {{ r.error }}
+      {%- endif %}
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>

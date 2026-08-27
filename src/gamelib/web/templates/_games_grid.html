@@ -1,0 +1,27 @@
+{% if games %}
+  {% for g in games %}
+  <article class="card" style="--spine:{{ platform_meta[g.platform].color }}">
+    <div class="card__cover">
+      {% if g.cover_url %}
+      <img src="{{ g.cover_url }}" alt="" loading="lazy">
+      {% else %}
+      <div class="card__cover-placeholder" aria-hidden="true">{{ g.name[:1] | upper }}</div>
+      {% endif %}
+      <span class="card__status card__status--{{ g.completion_status }}"{% if g.platform != "nintendo" and g.completion_status != "unknown" %} title="Estimado a partir de tempo jogado/conquistas — não reportado pela plataforma"{% endif %}>{{ status_labels[g.completion_status] }}</span>
+    </div>
+    <div class="card__body">
+      <h3 class="card__name">{{ g.name }}</h3>
+      <p class="card__meta">
+        <span class="tag" style="color:{{ platform_meta[g.platform].color }}">{{ platform_meta[g.platform].label }}</span>
+        <span class="card__time">{{ g.playtime_minutes | playtime }}</span>
+      </p>
+      <p class="card__achievements">{{ g.achievements_unlocked | achievements(g.achievements_total) }}</p>
+    </div>
+  </article>
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <p class="empty-state__title">Nenhum jogo encontrado</p>
+    <p class="empty-state__hint">Ajuste os filtros ou rode uma sincronização para popular a biblioteca.</p>
+  </div>
+{% endif %}
