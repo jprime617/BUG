@@ -5,6 +5,8 @@ na UI, não o que ele significa.
 
 from __future__ import annotations
 
+from datetime import date
+
 from gamelib.models import CompletionStatus, Platform
 
 PLATFORM_META: dict[Platform, dict[str, str]] = {
@@ -44,3 +46,28 @@ def format_achievements(unlocked: int | None, total: int | None) -> str:
     if total == 0:
         return "sem conquistas"
     return f"{unlocked}/{total}"
+
+
+_MESES_PT = (
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+)  # fmt: skip
+
+
+def format_release_date(value: str | None) -> str:
+    """RAWG retorna `released` como 'AAAA-MM-DD' ou None (data desconhecida)."""
+    if not value:
+        return "—"
+    try:
+        d = date.fromisoformat(value)
+    except ValueError:
+        return value
+    return f"{d.day} de {_MESES_PT[d.month - 1]} de {d.year}"
+
+
+def format_rating_stars(rating: float | None) -> str:
+    """RAWG usa escala 0–5. None = jogo sem avaliações suficientes na RAWG."""
+    if rating is None:
+        return "sem avaliação"
+    full = max(0, min(5, round(rating)))
+    return "★" * full + "☆" * (5 - full)

@@ -1,0 +1,41 @@
+{% if error %}
+<div class="modal-error">
+  <p class="modal-error__title">Não foi possível carregar os detalhes.</p>
+  <p class="modal-error__hint">{{ error }}</p>
+</div>
+{% else %}
+<article class="modal-game">
+  <div class="modal-game__cover">
+    {% if game.cover_url %}
+    <img src="{{ game.cover_url }}" alt="">
+    {% else %}
+    <div class="modal-game__cover-placeholder" aria-hidden="true">{{ game.name[:1] | upper }}</div>
+    {% endif %}
+  </div>
+  <div class="modal-game__info">
+    <h2 class="modal-game__title">{{ game.name }}</h2>
+    <dl class="modal-game__facts">
+      <div class="modal-game__fact">
+        <dt>Lançamento</dt>
+        <dd>{{ metadata.release_date | release_date }}</dd>
+      </div>
+      <div class="modal-game__fact">
+        <dt>Gênero</dt>
+        <dd>{{ metadata.genres | join(", ") if metadata.genres else "—" }}</dd>
+      </div>
+      <div class="modal-game__fact">
+        <dt>Avaliação</dt>
+        <dd class="modal-game__rating">{{ metadata.rating | rating_stars }}</dd>
+      </div>
+    </dl>
+    {% if metadata.video_url %}
+    <video class="modal-game__video" controls preload="none" poster="{{ game.cover_url or '' }}">
+      <source src="{{ metadata.video_url }}" type="video/mp4">
+      Seu navegador não suporta vídeo embutido.
+    </video>
+    {% else %}
+    <p class="modal-game__no-video">Trailer indisponível.</p>
+    {% endif %}
+  </div>
+</article>
+{% endif %}

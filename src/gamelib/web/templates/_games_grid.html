@@ -1,6 +1,16 @@
 {% if games %}
   {% for g in games %}
-  <article class="card" style="--spine:{{ platform_meta[g.platform].color }}">
+  <article
+    class="card"
+    style="--spine:{{ platform_meta[g.platform].color }}"
+    role="button"
+    tabindex="0"
+    aria-haspopup="dialog"
+    hx-get="/games/{{ g.id }}/modal"
+    hx-target="#game-modal-content"
+    hx-swap="innerHTML"
+    hx-trigger="click, keyup[key=='Enter']"
+  >
     <div class="card__cover">
       {% if g.cover_url %}
       <img src="{{ g.cover_url }}" alt="" loading="lazy">

@@ -12,5 +12,14 @@
 </head>
 <body>
   {% block content %}{% endblock %}
+
+  <dialog id="game-modal" class="game-modal">
+    <button type="button" class="game-modal__close" aria-label="Fechar" data-modal-close>&times;</button>
+    <div id="game-modal-content" class="game-modal__content">
+      <p class="modal-loading">Carregando…</p>
+    </div>
+  </dialog>
+
+  <script src="/static/game-modal.js" defer></script>
 </body>
 </html>

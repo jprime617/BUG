@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from gamelib import db
 from gamelib.config import load_settings
+from gamelib.metadata import MetadataError, get_or_fetch_metadata
 from gamelib.models import PLATFORMS
 from gamelib.sync import run_sync
 from gamelib.web.presentation import (
@@ -21,6 +22,8 @@ from gamelib.web.presentation import (
     STATUS_LABELS,
     format_achievements,
     format_playtime,
+    format_rating_stars,
+    format_release_date,
 )
 
 WEB_DIR = Path(__file__).resolve().parent
@@ -31,6 +34,8 @@ app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=WEB_DIR / "templates")
 templates.env.filters["playtime"] = format_playtime
 templates.env.filters["achievements"] = format_achievements
+templates.env.filters["release_date"] = format_release_date
+templates.env.filters["rating_stars"] = format_rating_stars
 
 
 def get_conn():
@@ -109,6 +114,31 @@ def partial_games(
             "platform_meta": PLATFORM_META,
             "status_labels": STATUS_LABELS,
         },
+    )
+
+
+@app.get("/games/{game_id}/modal")
+def game_modal(request: Request, conn: Conn, game_id: int):
+    row = db.get_game(conn, game_id)
+    if row is None:
+        return templates.TemplateResponse(
+            request,
+            "games/_game_modal.html",
+            {"game": None, "metadata": None, "error": "Jogo não encontrado."},
+        )
+
+    game = db.row_to_dict(row)
+    settings = load_settings()
+    metadata, error = None, None
+    try:
+        metadata = get_or_fetch_metadata(conn, game_id, game["name"], settings.rawg_api_key)
+    except MetadataError as exc:
+        error = str(exc)
+
+    return templates.TemplateResponse(
+        request,
+        "games/_game_modal.html",
+        {"game": game, "metadata": metadata, "error": error},
     )
 
 
