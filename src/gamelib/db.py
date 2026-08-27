@@ -34,6 +34,15 @@ CREATE TABLE IF NOT EXISTS games (
 CREATE INDEX IF NOT EXISTS idx_games_platform ON games(platform);
 CREATE INDEX IF NOT EXISTS idx_games_completion_status ON games(completion_status);
 
+CREATE TABLE IF NOT EXISTS game_metadata (
+    game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+    release_date TEXT,
+    genres TEXT NOT NULL DEFAULT '[]',
+    rating REAL,
+    video_url TEXT,
+    fetched_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sync_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     platform TEXT NOT NULL,
@@ -126,6 +135,38 @@ def list_games(
     }
     sql += f" ORDER BY {sort_columns.get(sort, sort_columns['name'])}"
     return conn.execute(sql, params).fetchall()
+
+
+def get_game(conn: sqlite3.Connection, game_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM games WHERE id = ?", (game_id,)).fetchone()
+
+
+def get_game_metadata(conn: sqlite3.Connection, game_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM game_metadata WHERE game_id = ?", (game_id,)).fetchone()
+
+
+def upsert_game_metadata(
+    conn: sqlite3.Connection,
+    game_id: int,
+    release_date: str | None,
+    genres: list[str],
+    rating: float | None,
+    video_url: str | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO game_metadata (game_id, release_date, genres, rating, video_url, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(game_id) DO UPDATE SET
+            release_date=excluded.release_date,
+            genres=excluded.genres,
+            rating=excluded.rating,
+            video_url=excluded.video_url,
+            fetched_at=excluded.fetched_at
+        """,
+        (game_id, release_date, json.dumps(genres, ensure_ascii=False), rating, video_url, _now()),
+    )
+    conn.commit()
 
 
 def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
