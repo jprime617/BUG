@@ -311,6 +311,13 @@ a {
   z-index: 1;
 }
 
+.card__facet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), transparent 60%);
+}
+
 .card__cover {
   position: relative;
   aspect-ratio: 4 / 3;
@@ -351,13 +358,13 @@ a {
 }
 
 .card__status--playing {
-  color: var(--accent-strong);
-  border-color: var(--accent);
+  color: var(--accent-2);
+  border-color: var(--accent-2);
 }
 
 .card__status--completed {
-  color: #7fd1ab;
-  border-color: #3a5f4e;
+  color: var(--accent-strong);
+  border-color: var(--accent);
 }
 
 .card__body {
