@@ -75,13 +75,17 @@ def list_games(
 
 
 def get_game(conn: Client, game_id: int) -> dict | None:
-    return conn.table("games").select("*").eq("id", game_id).maybe_single().execute().data
+    # `.maybe_single()` faz `.execute()` devolver `None` puro (não uma
+    # resposta com `.data = None`) quando a query não acha linha.
+    response = conn.table("games").select("*").eq("id", game_id).maybe_single().execute()
+    return response.data if response is not None else None
 
 
 def get_game_metadata(conn: Client, game_id: int) -> dict | None:
-    return (
-        conn.table("game_metadata").select("*").eq("game_id", game_id).maybe_single().execute().data
+    response = (
+        conn.table("game_metadata").select("*").eq("game_id", game_id).maybe_single().execute()
     )
+    return response.data if response is not None else None
 
 
 def upsert_game_metadata(

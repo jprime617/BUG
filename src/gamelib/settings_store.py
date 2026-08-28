@@ -45,14 +45,17 @@ def get_setting(
 ) -> str | None:
     resolved_client = client if client is not None else _default_client()
     if resolved_client is not None:
-        row = (
+        # `.maybe_single()` faz `.execute()` devolver `None` puro (não uma
+        # resposta com `.data = None`) quando a query não acha linha —
+        # comportamento do supabase-py, não do PostgREST.
+        response = (
             resolved_client.table("settings")
             .select("value, encrypted")
             .eq("key", key)
             .maybe_single()
             .execute()
-            .data
         )
+        row = response.data if response is not None else None
         if row is not None and row.get("value") is not None:
             if row["encrypted"]:
                 try:
