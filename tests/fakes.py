@@ -34,8 +34,8 @@ class _FakeQuery:
         self._filters.append((col, "ilike", pattern))
         return self
 
-    def order(self, col: str, desc: bool = False) -> _FakeQuery:
-        self._order = (col, desc)
+    def order(self, col: str, desc: bool = False, nullsfirst: bool | None = None) -> _FakeQuery:
+        self._order = (col, desc, nullsfirst)
         return self
 
     def maybe_single(self) -> _FakeQuery:
@@ -59,8 +59,16 @@ class _FakeQuery:
     def execute(self) -> _FakeResult:
         rows = [r for r in self._rows if self._matches(r)]
         if self._order:
-            col, desc = self._order
-            rows = sorted(rows, key=lambda r: (r.get(col) is None, r.get(col)), reverse=desc)
+            col, desc, nullsfirst = self._order
+            # Mesmo default do Postgres quando `nullsfirst` não é
+            # especificado: NULLS FIRST em DESC, NULLS LAST em ASC.
+            if nullsfirst is None:
+                nullsfirst = desc
+            non_null = sorted(
+                (r for r in rows if r.get(col) is not None), key=lambda r: r[col], reverse=desc
+            )
+            null_rows = [r for r in rows if r.get(col) is None]
+            rows = [*null_rows, *non_null] if nullsfirst else [*non_null, *null_rows]
         if self._mode == "maybe_single":
             return _FakeResult(rows[0] if rows else None)
         if self._mode == "single":

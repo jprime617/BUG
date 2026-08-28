@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from gamelib import db
 from gamelib.models import Game
 
@@ -28,6 +30,40 @@ def test_list_games_filtra_por_plataforma_e_busca(db_conn):
 
     assert [r["name"] for r in db.list_games(db_conn, USER_A, platform="psn")] == ["Bloodborne"]
     assert [r["name"] for r in db.list_games(db_conn, USER_A, query="port")] == ["Portal"]
+
+
+def test_list_games_ordenado_por_playtime_poe_jogos_sem_dado_no_final(db_conn):
+    db.upsert_game(
+        db_conn,
+        USER_A,
+        Game(platform="steam", external_id="1", name="Com tempo", playtime_minutes=120),
+    )
+    db.upsert_game(
+        db_conn,
+        USER_A,
+        Game(platform="steam", external_id="2", name="Sem tempo", playtime_minutes=None),
+    )
+
+    names = [r["name"] for r in db.list_games(db_conn, USER_A, sort="playtime")]
+
+    assert names == ["Com tempo", "Sem tempo"]
+
+
+def test_list_games_ordenado_por_last_played_poe_jogos_sem_dado_no_final(db_conn):
+    db.upsert_game(
+        db_conn,
+        USER_A,
+        Game(platform="steam", external_id="1", name="Jogado", last_played_at=datetime(2024, 1, 1)),
+    )
+    db.upsert_game(
+        db_conn,
+        USER_A,
+        Game(platform="steam", external_id="2", name="Nunca jogado", last_played_at=None),
+    )
+
+    names = [r["name"] for r in db.list_games(db_conn, USER_A, sort="last_played")]
+
+    assert names == ["Jogado", "Nunca jogado"]
 
 
 def test_list_games_nao_ve_jogos_de_outro_usuario(db_conn):

@@ -65,9 +65,12 @@ def list_games(
         q = q.ilike("name", f"%{query}%")
 
     if sort == "playtime":
-        q = q.order("playtime_minutes", desc=True)
+        # `nullsfirst=False`: sem isso, o padrão do Postgres pra ORDER BY
+        # DESC é NULLS FIRST — jogos sem playtime apareceriam no topo em vez
+        # do final.
+        q = q.order("playtime_minutes", desc=True, nullsfirst=False)
     elif sort == "last_played":
-        q = q.order("last_played_at", desc=True)
+        q = q.order("last_played_at", desc=True, nullsfirst=False)
     elif sort == "platform":
         q = q.order("platform").order("name_sort")
     else:
