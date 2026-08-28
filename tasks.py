@@ -7,11 +7,11 @@ wrappers finos que chamam este arquivo. Uso:
     python tasks.py <alvo>
 
 Alvos: setup | clean | test | run-pipeline | lint | format | map | help |
-       sync <user_id> | import-nintendo <user_id> <csv> | serve
+       sync <user_id> | serve
 
-`sync`/`import-nintendo` escrevem na biblioteca de um usuário específico —
-`user_id` é o UUID do usuário no Supabase Auth (Authentication > Users no
-painel). Útil pra depuração/importação manual fora da tela /configuracoes.
+`sync` escreve na biblioteca de um usuário específico — `user_id` é o UUID
+do usuário no Supabase Auth (Authentication > Users no painel). Útil pra
+depuração fora da tela /configuracoes.
 """
 
 from __future__ import annotations
@@ -122,31 +122,6 @@ def sync(argv: list[str]) -> int:
     return 0 if report.ok else 1
 
 
-def import_nintendo(argv: list[str]) -> int:
-    if len(argv) < 2:
-        print("Uso: python tasks.py import-nintendo <user_id> <caminho.csv>")
-        return 2
-
-    from gamelib import db
-    from gamelib.collectors.base import CollectorError
-    from gamelib.collectors.nintendo_csv import import_csv
-    from gamelib.config import load_settings
-
-    user_id, csv_path = argv[0], argv[1]
-    settings = load_settings(user_id)
-    try:
-        games = import_csv(Path(csv_path), settings)
-    except CollectorError as exc:
-        print(f"Falha na importacao: {exc}")
-        return 1
-
-    conn = db.connect(settings)
-    for game in games:
-        db.upsert_game(conn, user_id, game)
-    print(f"Importados {len(games)} jogo(s) da Nintendo a partir de {csv_path}.")
-    return 0
-
-
 def serve(argv: list[str]) -> int:
     host = "127.0.0.1"
     port = "8000"
@@ -185,7 +160,6 @@ TARGETS = {
     "format": format_,
     "map": _map,
     "sync": sync,
-    "import-nintendo": import_nintendo,
     "serve": serve,
     "help": help_,
 }

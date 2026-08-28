@@ -13,8 +13,6 @@ PLATFORM_META: dict[Platform, dict[str, str]] = {
     "steam": {"label": "Steam", "color": "#2f5a82", "short": "STEAM"},
     "psn": {"label": "PlayStation", "color": "#3d4f9e", "short": "PSN"},
     "xbox": {"label": "Xbox", "color": "#1f7a6c", "short": "XBOX"},
-    "epic": {"label": "Epic Games", "color": "#7a4f1f", "short": "EPIC"},
-    "nintendo": {"label": "Nintendo", "color": "#b23a5c", "short": "NSW"},
 }
 
 STATUS_LABELS: dict[CompletionStatus, str] = {

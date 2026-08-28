@@ -7,6 +7,11 @@ Este arquivo mantém o histórico das decisões críticas do projeto para que a 
 - resumo em até 3 linhas
 -->
 
+## [2026-08-28] Remove Epic/Nintendo; corrige playtime do Xbox
+- Epic (`legendary` CLI, só local) e Nintendo (CSV manual) removidos do sistema: `collectors/epic.py`/`nintendo_csv.py` deletados, `Platform`/`PLATFORMS` agora só `steam`/`psn`/`xbox`, `legendary_bin`/`LEGENDARY_BIN` fora de `Settings`/`env.example`, alvo `import-nintendo` removido de `tasks.py`/`Makefile`.
+- Bug real corrigido: playtime do Xbox nunca aparecia porque o coletor lia `GET /achievements/stats/{titleId}` (sem `MinutesPlayed` garantido); OpenXBL exige pedir o stat explicitamente via `POST /player/stats` com `xuid` + lista de stats (conforme openapi.yaml oficial em github.com/OpenXBL/Docs) — agora um único POST em lote pra todos os títulos.
+- Mesmo com o fix, nem todo jogo Xbox publica `MinutesPlayed` na Xbox Live — quando ausente, o jogo aparece na biblioteca normalmente, só sem tempo jogado (documentado em `docs/CREDENTIALS.md`).
+
 ## [2026-08-28] Multi-tenant: biblioteca por usuário (fim da vitrine compartilhada)
 - `games`/`sync_runs`/`settings` ganham `user_id` (FK `auth.users`); toda leitura/escrita em `db.py`/`settings_store.py`/`sync.py` passa a exigir `user_id` e RLS troca `using (true)` por `using (auth.uid() = user_id)`.
 - Conceito de admin removido (`require_admin`/`ADMIN_EMAIL` fora): `/configuracoes` (Steam/PSN/Xbox) e `/sync` abrem pra qualquer usuário autenticado, escopados ao próprio id. `RAWG_API_KEY` continua a única credencial global, só via `.env`.

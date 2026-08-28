@@ -34,7 +34,7 @@
     </span>
     <span
       class="card__status card__status--{{ g.completion_status }}"
-      {% if g.platform != "nintendo" and g.completion_status != "unknown" %} title="Estimado a partir de tempo jogado/conquistas — não reportado pela plataforma"{% endif %}
+      {% if g.completion_status != "unknown" %} title="Estimado a partir de tempo jogado/conquistas — não reportado pela plataforma"{% endif %}
     >{{ status_labels[g.completion_status] }}</span>
   </a>
   {% endfor %}

@@ -4,7 +4,7 @@
 
 PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null || echo python)
 
-.PHONY: setup clean test run-pipeline lint format map help sync import-nintendo serve
+.PHONY: setup clean test run-pipeline lint format map help sync serve
 
 setup:
 	@$(PYTHON) tasks.py setup
@@ -28,10 +28,7 @@ map:
 	@$(PYTHON) tasks.py map
 
 sync:
-	@$(PYTHON) tasks.py sync
-
-import-nintendo:
-	@$(PYTHON) tasks.py import-nintendo $(CSV)
+	@$(PYTHON) tasks.py sync $(USER_ID)
 
 serve:
 	@$(PYTHON) tasks.py serve

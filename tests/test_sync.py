@@ -93,24 +93,6 @@ class _FakeStatusVariants:
         ]
 
 
-class _FakeNintendo:
-    platform = "nintendo"
-
-    def is_configured(self, settings) -> bool:
-        return True
-
-    def fetch(self, settings) -> list[Game]:
-        return [
-            Game(
-                platform="nintendo",
-                external_id="zelda",
-                name="Zelda",
-                playtime_minutes=4200,
-                completion_status="abandoned",
-            )
-        ]
-
-
 def test_run_sync_infere_completion_status_a_partir_de_playtime_e_achievements(settings, db_conn):
     run_sync(
         USER_ID, settings=settings, collectors={"steam": _FakeStatusVariants()}, client=db_conn
@@ -123,10 +105,3 @@ def test_run_sync_infere_completion_status_a_partir_de_playtime_e_achievements(s
         "nao_iniciado": "not_started",
         "sem_dado": "unknown",
     }
-
-
-def test_run_sync_nao_sobrescreve_completion_status_manual_do_nintendo(settings, db_conn):
-    run_sync(USER_ID, settings=settings, collectors={"nintendo": _FakeNintendo()}, client=db_conn)
-
-    row = db.list_games(db_conn, USER_ID)[0]
-    assert row["completion_status"] == "abandoned"

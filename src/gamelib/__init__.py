@@ -1,1 +1,1 @@
-"""Painel unificado de bibliotecas de jogos (Steam, PSN, Xbox, Epic, Nintendo)."""
+"""Painel unificado de bibliotecas de jogos (Steam, PSN, Xbox)."""

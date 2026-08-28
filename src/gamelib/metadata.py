@@ -1,7 +1,7 @@
 """Metadados externos (RAWG) para o modal de detalhes do jogo — cache local
 (`game_metadata`) com TTL para não bater na API a cada clique. Mesmo padrão
-de chamada/erro de `collectors/nintendo_csv.py` (httpx + log, sem exceção
-não tratada até a fronteira do endpoint).
+de chamada/erro dos `collectors/` (httpx + log, sem exceção não tratada até
+a fronteira do endpoint).
 """
 
 from __future__ import annotations

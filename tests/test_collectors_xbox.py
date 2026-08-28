@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -8,17 +10,20 @@ from gamelib.collectors.xbox import XboxCollector
 from gamelib.config import Settings
 
 
-def _title_history(titles: list[dict]) -> dict:
-    return {"content": {"xuid": "1", "titles": titles}, "code": 0}
+def _title_history(titles: list[dict], xuid: str = "1") -> dict:
+    return {"content": {"xuid": xuid, "titles": titles}, "code": 0}
 
 
-def _stats_response(minutes: int | None) -> dict:
-    if minutes is None:
-        return {"content": {"statlistscollection": []}, "code": 0}
+def _stats_response(minutes_by_title: dict[str, int]) -> dict:
     return {
         "content": {
             "statlistscollection": [
-                {"stats": [{"name": "MinutesPlayed", "type": "Integer", "value": str(minutes)}]}
+                {
+                    "stats": [
+                        {"name": "MinutesPlayed", "titleid": title_id, "value": str(minutes)}
+                        for title_id, minutes in minutes_by_title.items()
+                    ]
+                }
             ]
         },
         "code": 0,
@@ -31,7 +36,6 @@ def _settings() -> Settings:
         steam_id64=None,
         psn_npsso=None,
         xbox_openxbl_key="OPENXBL_KEY",
-        legendary_bin="legendary",
     )
 
 
@@ -45,7 +49,7 @@ def _patch_client(monkeypatch, handler) -> None:
     monkeypatch.setattr(httpx, "Client", fake_client)
 
 
-def test_xbox_collector_mapeia_payload_e_busca_playtime_por_titulo(monkeypatch):
+def test_xbox_collector_mapeia_payload_e_busca_playtime_em_lote(monkeypatch):
     titles = [
         {
             "titleId": "abc123",
@@ -56,13 +60,15 @@ def test_xbox_collector_mapeia_payload_e_busca_playtime_por_titulo(monkeypatch):
         },
         {"name": "sem titleId, deve ser ignorado"},
     ]
+    stats_requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["x-authorization"] == "OPENXBL_KEY"
         if request.url.path == "/api/v2/player/titleHistory":
             return httpx.Response(200, json=_title_history(titles))
-        assert request.url.path == "/api/v2/achievements/stats/abc123"
-        return httpx.Response(200, json=_stats_response(300))
+        assert request.url.path == "/api/v2/player/stats"
+        stats_requests.append(request)
+        return httpx.Response(200, json=_stats_response({"abc123": 300}))
 
     _patch_client(monkeypatch, handler)
 
@@ -76,6 +82,13 @@ def test_xbox_collector_mapeia_payload_e_busca_playtime_por_titulo(monkeypatch):
     assert game.achievements_unlocked == 10
     assert game.achievements_total == 50
 
+    assert len(stats_requests) == 1
+    body = stats_requests[0].content
+
+    payload = json.loads(body)
+    assert payload["xuids"] == ["1"]
+    assert payload["stats"] == [{"name": "MinutesPlayed", "titleId": "abc123"}]
+
 
 def test_xbox_collector_sem_stat_minutesplayed_fica_sem_playtime(monkeypatch):
     titles = [{"titleId": "old1", "name": "Jogo antigo sem stat"}]
@@ -83,7 +96,7 @@ def test_xbox_collector_sem_stat_minutesplayed_fica_sem_playtime(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v2/player/titleHistory":
             return httpx.Response(200, json=_title_history(titles))
-        return httpx.Response(200, json=_stats_response(None))
+        return httpx.Response(200, json=_stats_response({}))
 
     _patch_client(monkeypatch, handler)
 
@@ -92,29 +105,20 @@ def test_xbox_collector_sem_stat_minutesplayed_fica_sem_playtime(monkeypatch):
     assert games[0].playtime_minutes is None
 
 
-def test_xbox_collector_para_de_buscar_playtime_quando_rate_limit_acaba(monkeypatch):
-    titles = [{"titleId": f"t{i}", "name": f"Jogo {i}"} for i in range(3)]
-    stats_calls: list[str] = []
+def test_xbox_collector_falha_ao_buscar_playtime_nao_derruba_a_sync(monkeypatch):
+    titles = [{"titleId": "t1", "name": "Jogo 1"}]
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v2/player/titleHistory":
             return httpx.Response(200, json=_title_history(titles))
-        title_id = request.url.path.rsplit("/", 1)[-1]
-        stats_calls.append(title_id)
-        # já no limite de seguranca a partir da primeira chamada de stats
-        return httpx.Response(
-            200, json=_stats_response(100), headers={"x-ratelimit-remaining": "1"}
-        )
+        return httpx.Response(500)
 
     _patch_client(monkeypatch, handler)
 
     games = XboxCollector().fetch(_settings())
 
-    assert len(stats_calls) == 1
-    playtimes = {g.external_id: g.playtime_minutes for g in games}
-    known = [pt for pt in playtimes.values() if pt is not None]
-    assert len(known) == 1
-    assert sum(1 for pt in playtimes.values() if pt is None) == 2
+    assert len(games) == 1
+    assert games[0].playtime_minutes is None
 
 
 def test_xbox_collector_retorna_vazio_se_resposta_sem_content(monkeypatch):

@@ -18,5 +18,4 @@ def settings() -> Settings:
         steam_id64=None,
         psn_npsso=None,
         xbox_openxbl_key=None,
-        legendary_bin="legendary",
     )

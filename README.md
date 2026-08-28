@@ -1,13 +1,11 @@
 # Biblioteca de Jogos — dashboard unificado
 
-Painel local que agrega jogos possuídos em Steam, PlayStation, Xbox, Epic
-Games e Nintendo em uma base SQLite única, com um dashboard web para
-visualizar, buscar e filtrar.
+Painel local que agrega jogos possuídos em Steam, PlayStation e Xbox em uma
+base SQLite única, com um dashboard web para visualizar, buscar e filtrar.
 
 Disponibilidade de dados varia por plataforma (Steam tem API oficial
-completa; PSN/Xbox/Epic usam wrappers não-oficiais; Nintendo é só importação
-manual/CSV) — campos sem dado disponível aparecem como "—" na UI, nunca como
-zero inventado.
+completa; PSN/Xbox usam wrappers não-oficiais) — campos sem dado disponível
+aparecem como "—" na UI, nunca como zero inventado.
 
 ## Setup
 
@@ -24,13 +22,12 @@ puladas na sincronização.
 ## Uso
 
 ```bash
-python tasks.py sync                              # sincroniza Steam/PSN/Xbox/Epic configurados
-python tasks.py import-nintendo caminho/jogos.csv  # importa a Nintendo via CSV manual
-python tasks.py serve                              # sobe o dashboard em http://127.0.0.1:8000
+python tasks.py sync   # sincroniza Steam/PSN/Xbox configurados
+python tasks.py serve  # sobe o dashboard em http://127.0.0.1:8000
 ```
 
-(equivalentes via `make sync`, `make import-nintendo CSV=...`, `make serve`,
-ou `.\tasks.ps1 sync` / `.\tasks.ps1 import-nintendo <csv>` / `.\tasks.ps1 serve` no Windows)
+(equivalentes via `make sync`, `make serve`, ou `.\tasks.ps1 sync` /
+`.\tasks.ps1 serve` no Windows)
 
 Sincronização é sempre sob demanda — para automatizar, agende
 `python tasks.py sync` via cron (Linux/macOS) ou Agendador de Tarefas
@@ -48,7 +45,7 @@ python tasks.py lint    # ruff
 - `src/gamelib/models.py` — modelo unificado de jogo (`Game`).
 - `src/gamelib/db.py` — SQLite (stdlib), tabelas `games` e `sync_runs`.
 - `src/gamelib/collectors/` — um coletor por plataforma (`steam`, `psn`,
-  `xbox`, `epic`, `nintendo_csv`), protocolo comum em `base.py`.
+  `xbox`), protocolo comum em `base.py`.
 - `src/gamelib/sync.py` — orquestra os coletores; falha de uma plataforma
   não derruba as outras (circuit breaker por plataforma).
 - `src/gamelib/web/` — dashboard FastAPI + Jinja2 + HTMX (sem CDN — HTMX

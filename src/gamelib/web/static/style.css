@@ -197,6 +197,12 @@ code {
   font-size: 14px;
 }
 
+.empty-hint a {
+  color: var(--mark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .empty-hint code {
   background: var(--binder-line);
   padding: 2px 6px;

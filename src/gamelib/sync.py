@@ -27,8 +27,7 @@ logging.basicConfig(
 
 
 def _collectors() -> dict[Platform, Collector]:
-    # import tardio: evita puxar httpx/PSNAWP/subprocess pra quem só usa CSV/db.
-    from gamelib.collectors.epic import EpicCollector
+    # import tardio: evita puxar httpx/PSNAWP pra quem só usa db.
     from gamelib.collectors.psn import PsnCollector
     from gamelib.collectors.steam import SteamCollector
     from gamelib.collectors.xbox import XboxCollector
@@ -37,14 +36,12 @@ def _collectors() -> dict[Platform, Collector]:
         "steam": SteamCollector(),
         "psn": PsnCollector(),
         "xbox": XboxCollector(),
-        "epic": EpicCollector(),
     }
 
 
 def _infer_completion_status(game: Game) -> CompletionStatus:
     """Nenhuma API de plataforma reporta status de conclusão — inferimos a
-    partir de playtime/achievements. `nintendo` fica de fora: o CSV manual já
-    traz o status escolhido pelo usuário, não deve ser sobrescrito.
+    partir de playtime/achievements.
     """
     if game.achievements_total and game.achievements_unlocked == game.achievements_total:
         return "completed"
@@ -110,8 +107,7 @@ def run_sync(
             continue
 
         for game in games:
-            if game.platform != "nintendo":
-                game.completion_status = _infer_completion_status(game)
+            game.completion_status = _infer_completion_status(game)
             db.upsert_game(conn, user_id, game)
         finished = datetime.now(UTC)
         log.info("[%d/%d] %s OK: %d jogo(s)", i, len(targets), platform, len(games))

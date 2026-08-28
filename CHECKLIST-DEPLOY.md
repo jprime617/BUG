@@ -74,8 +74,7 @@ Steam/PSN/Xbox da própria conta depois, pela tela `/configuracoes`.
 - [ ] Salvar e reabrir `/configuracoes` — o campo aparece como "configurado"
       (mascarado), não em texto puro.
 - [ ] Clicar "Sincronizar" na home — a plataforma configurada roda
-      normalmente; Epic aparece como "pulado", sem erro (esperado — ver
-      `docs/CREDENTIALS.md`).
+      normalmente.
 - [ ] Se `RAWG_API_KEY` estiver configurada na Vercel, abrir um jogo
       qualquer e confirmar que sinopse/nota Metacritic/galeria carregam.
 - [ ] Deslogar (botão "Sair" na barra superior) e confirmar que qualquer

@@ -27,7 +27,6 @@ class Settings:
     steam_id64: str | None
     psn_npsso: str | None
     xbox_openxbl_key: str | None
-    legendary_bin: str
     rawg_api_key: str | None = None
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
@@ -77,7 +76,6 @@ def load_settings(user_id: str | None = None) -> Settings:
         psn_npsso=psn_npsso,
         xbox_openxbl_key=xbox_openxbl_key,
         rawg_api_key=os.environ.get("RAWG_API_KEY") or None,
-        legendary_bin=os.environ.get("LEGENDARY_BIN", "legendary"),
         supabase_url=supabase_url,
         supabase_anon_key=supabase_anon_key,
         supabase_service_role_key=supabase_service_role_key,

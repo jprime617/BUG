@@ -4,6 +4,14 @@ Sem OAuth da Microsoft: o usuário gera a API key logando com a conta Xbox em
 xbl.io e usa o header `X-Authorization`. Parsing defensivo (`.get()`) porque o
 formato exato de resposta pode mudar entre versões da API — um campo ausente
 vira `None` no `Game`, nunca uma exceção que aborta a plataforma inteira.
+
+Playtime: `POST /player/stats` pedindo explicitamente o stat `MinutesPlayed`
+por título (ver openapi.yaml oficial em github.com/OpenXBL/Docs) — o stat não
+vem de graça em `GET /achievements/stats/{titleId}` (que devolve só o que a
+Xbox Live já tem catalogado por padrão pra aquele jogo, nem sempre inclui
+MinutesPlayed). Um único POST em lote pra todos os títulos, em vez de uma
+chamada por jogo — também evita estourar o rate limit do tier grátis em
+bibliotecas grandes.
 """
 
 from __future__ import annotations
@@ -20,11 +28,6 @@ log = logging.getLogger("gamelib.collectors.xbox")
 
 BASE_URL = "https://xbl.io/api/v2"
 
-# Tier grátis do OpenXBL: 150 requisições/hora. Playtime exige 1 requisição por
-# jogo (não vem na lista); paramos antes de estourar pra não quebrar o resto da
-# sync — o restante fica sem playtime nesta rodada e é completado numa próxima.
-RATE_LIMIT_SAFETY_MARGIN = 5
-
 
 class XboxCollector:
     platform = "xbox"
@@ -39,8 +42,9 @@ class XboxCollector:
                 resp = client.get(f"{BASE_URL}/player/titleHistory")
                 if resp.status_code != 200:
                     raise CollectorError(f"xbox: titleHistory retornou HTTP {resp.status_code}")
-                titles = (resp.json().get("content") or {}).get("titles", [])
-                playtime_by_title = self._fetch_playtime(client, titles)
+                content = resp.json().get("content") or {}
+                titles = content.get("titles", [])
+                playtime_by_title = self._fetch_playtime(client, content.get("xuid"), titles)
         except httpx.HTTPError as exc:
             raise CollectorError(f"xbox: falha de rede: {exc}") from exc
 
@@ -51,49 +55,54 @@ class XboxCollector:
                 games.append(game)
         return games
 
-    def _fetch_playtime(self, client: httpx.Client, titles: list[dict]) -> dict[str, int]:
-        # Prioriza os jogados mais recentemente — são os mais relevantes e os
-        # mais prováveis de ter playtime desatualizado.
-        ordered = sorted(
-            titles,
-            key=lambda t: (t.get("titleHistory") or {}).get("lastTimePlayed") or "",
-            reverse=True,
-        )
-        playtime: dict[str, int] = {}
-        for entry in ordered:
-            title_id = entry.get("titleId")
-            if not title_id:
-                continue
+    def _fetch_playtime(
+        self, client: httpx.Client, xuid: str | None, titles: list[dict]
+    ) -> dict[str, int]:
+        title_ids = [str(t["titleId"]) for t in titles if t.get("titleId")]
+        if not xuid or not title_ids:
+            return {}
 
-            resp = client.get(f"{BASE_URL}/achievements/stats/{title_id}")
-            if resp.status_code == 200:
-                minutes = self._extract_minutes_played(resp.json())
-                if minutes is not None:
-                    playtime[str(title_id)] = minutes
-            else:
-                log.debug("xbox: stats de %s retornou HTTP %d, pulando", title_id, resp.status_code)
+        body = {
+            "xuids": [str(xuid)],
+            "groups": [],
+            "stats": [{"name": "MinutesPlayed", "titleId": title_id} for title_id in title_ids],
+        }
+        try:
+            resp = client.post(f"{BASE_URL}/player/stats", json=body)
+        except httpx.HTTPError as exc:
+            log.warning("xbox: falha ao buscar playtime em lote (%s) — seguindo sem playtime", exc)
+            return {}
+        if resp.status_code != 200:
+            log.warning(
+                "xbox: player/stats retornou HTTP %d — seguindo sem playtime", resp.status_code
+            )
+            return {}
 
-            remaining = resp.headers.get("x-ratelimit-remaining")
-            if remaining is not None and int(remaining) <= RATE_LIMIT_SAFETY_MARGIN:
-                log.info(
-                    "xbox: rate limit da API quase no fim — %d/%d jogo(s) sem playtime "
-                    "nesta sync (completa nas próximas)",
-                    len(titles) - len(playtime),
-                    len(titles),
-                )
-                break
+        playtime = self._extract_playtime_by_title(resp.json())
+        if not playtime:
+            log.info(
+                "xbox: nenhum jogo reportou MinutesPlayed nesta sync (%d título(s) consultado(s))"
+                " — nem todo jogo publica esse stat na Xbox Live",
+                len(title_ids),
+            )
         return playtime
 
     @staticmethod
-    def _extract_minutes_played(stats_payload: dict) -> int | None:
-        for group in (stats_payload.get("content") or {}).get("statlistscollection", []):
+    def _extract_playtime_by_title(payload: dict) -> dict[str, int]:
+        playtime: dict[str, int] = {}
+        for group in (payload.get("content") or {}).get("statlistscollection", []):
             for stat in group.get("stats", []):
-                if stat.get("name") == "MinutesPlayed" and stat.get("value") is not None:
-                    try:
-                        return int(stat["value"])
-                    except (TypeError, ValueError):
-                        return None
-        return None
+                if stat.get("name") != "MinutesPlayed":
+                    continue
+                title_id = stat.get("titleid") or stat.get("titleId")
+                value = stat.get("value")
+                if title_id is None or value is None:
+                    continue
+                try:
+                    playtime[str(title_id)] = int(value)
+                except (TypeError, ValueError):
+                    continue
+        return playtime
 
     def _to_game(self, entry: dict, playtime_by_title: dict[str, int]) -> Game | None:
         title_id = entry.get("titleId")

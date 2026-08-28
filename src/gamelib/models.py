@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Literal
 
-Platform = Literal["steam", "psn", "xbox", "epic", "nintendo"]
+Platform = Literal["steam", "psn", "xbox"]
 CompletionStatus = Literal["not_started", "playing", "completed", "abandoned", "unknown"]
 
-PLATFORMS: tuple[Platform, ...] = ("steam", "psn", "xbox", "epic", "nintendo")
+PLATFORMS: tuple[Platform, ...] = ("steam", "psn", "xbox")
 COMPLETION_STATUSES: tuple[CompletionStatus, ...] = (
     "not_started",
     "playing",
