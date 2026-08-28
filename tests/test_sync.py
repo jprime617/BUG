@@ -3,7 +3,7 @@ from __future__ import annotations
 from gamelib import db
 from gamelib.collectors.base import CollectorError
 from gamelib.models import Game
-from gamelib.sync import run_sync
+from gamelib.sync import run_sync, run_sync_iter
 
 
 class _FakeOk:
@@ -105,3 +105,26 @@ def test_run_sync_infere_completion_status_a_partir_de_playtime_e_achievements(s
         "nao_iniciado": "not_started",
         "sem_dado": "unknown",
     }
+
+
+def test_run_sync_iter_emite_targets_primeiro_depois_um_platform_done_por_plataforma(
+    settings, db_conn
+):
+    events = list(
+        run_sync_iter(
+            USER_ID,
+            settings=settings,
+            collectors={"steam": _FakeOk(), "psn": _FakeBroken(), "xbox": _FakeUnconfigured()},
+            client=db_conn,
+        )
+    )
+
+    assert events[0].type == "targets"
+    assert events[0].targets == ["steam", "psn", "xbox"]
+
+    done_events = events[1:]
+    assert [e.type for e in done_events] == ["platform_done"] * 3
+    assert [e.platform for e in done_events] == ["steam", "psn", "xbox"]
+    assert [e.index for e in done_events] == [1, 2, 3]
+    assert [e.total for e in done_events] == [3, 3, 3]
+    assert [e.result.status for e in done_events] == ["success", "failed", "skipped"]

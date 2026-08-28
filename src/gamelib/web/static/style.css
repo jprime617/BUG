@@ -237,50 +237,187 @@ code {
   box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.25);
 }
 
-.sync-btn:disabled,
-.sync-btn.htmx-request {
+.sync-btn:disabled {
   opacity: 0.7;
   cursor: progress;
   transform: none;
   box-shadow: none;
 }
 
-.sync-btn__loading {
-  display: none;
-}
-
-.sync-btn.htmx-request .sync-btn__label {
-  display: none;
-}
-
-.sync-btn.htmx-request .sync-btn__loading {
-  display: inline;
-}
-
-.sync-report {
-  margin-top: var(--space-3);
+/* Selo de coleção — progresso de sync como carimbos de passaporte, um por
+   plataforma, numa rota que vira traço sólido conforme cada parada termina.
+   Fica escondido (`hidden`) até o clique em #sync-btn; sync-progress.js
+   povoa data-status/sublabel por carimbo em tempo real via SSE. ---------- */
+.sync-rally {
+  margin-top: var(--space-4);
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.sync-rally__route {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
 }
 
-.sync-report__item {
+.sync-rally__segment {
+  width: var(--space-6);
+  height: 2px;
+  background-image: linear-gradient(var(--binder-line), var(--binder-line));
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  position: relative;
+}
+
+.sync-rally__segment::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-top: 2px dashed var(--binder-line);
+}
+
+.sync-rally__segment.is-filled {
+  background-image: linear-gradient(var(--mark), var(--mark));
+  background-size: 100% 100%;
+  transition: background-size 450ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sync-rally__segment.is-filled::before {
+  border-top-color: transparent;
+}
+
+.sync-rally__stamp {
+  --stamp-color: var(--paper-ink-soft);
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--binder-line);
+  color: var(--paper-ink-soft);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease-out,
+    background 200ms ease-out, color 200ms ease-out;
+}
+
+.sync-rally__mark {
   font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--binder-line);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.sync-rally__sublabel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
   color: var(--paper-ink-soft);
 }
 
-.sync-report__item--success {
-  color: #d4f5df;
-  background: #1f4630;
+.sync-rally__stamp[data-status="syncing"] {
+  border-style: solid;
+  border-color: var(--stamp-color);
+  color: var(--paper-ink);
+  animation: stamp-pulse 900ms ease-in-out infinite;
 }
 
-.sync-report__item--error {
+.sync-rally__stamp[data-status="success"] {
+  border-style: solid;
+  border-color: var(--stamp-color);
+  background: var(--stamp-color);
+  color: var(--paper-ink);
+}
+
+.sync-rally__stamp[data-status="success"]::after {
+  content: "✓";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--binder);
+  color: #d4f5df;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  animation: stamp-pop 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sync-rally__stamp[data-status="failed"] {
+  border-style: solid;
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--paper-ink);
+}
+
+.sync-rally__stamp[data-status="failed"]::after {
+  content: "×";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--binder);
   color: #ffd9d0;
-  background: #5c2620;
+  font-size: 11px;
+  line-height: 15px;
+  text-align: center;
+  animation: stamp-pop 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sync-rally__stamp[data-status="skipped"] {
+  border-style: dashed;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--binder-line),
+    var(--binder-line) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  opacity: 0.7;
+}
+
+.sync-rally__count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--paper-ink-soft);
+  white-space: nowrap;
+}
+
+@keyframes stamp-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes stamp-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-rally__stamp[data-status="syncing"] {
+    animation: none;
+  }
+
+  .sync-rally__stamp[data-status="success"]::after,
+  .sync-rally__stamp[data-status="failed"]::after {
+    animation: none;
+  }
+
+  .sync-rally__segment.is-filled {
+    transition: none;
+  }
 }
 
 /* Medidor de coleção — barra segmentada com legenda por plataforma ------- */

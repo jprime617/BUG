@@ -69,6 +69,81 @@ class SyncReport:
         return all(r.status != "failed" for r in self.results)
 
 
+@dataclass
+class SyncEvent:
+    """Evento de progresso emitido por `run_sync_iter` — consumido tanto
+    pelo wrapper síncrono `run_sync` quanto pelo endpoint de streaming SSE
+    (`GET /sync/stream` em `web/app.py`).
+    """
+
+    type: str  # "targets" | "platform_done"
+    targets: list[str] | None = None
+    platform: str | None = None
+    index: int | None = None
+    total: int | None = None
+    result: PlatformResult | None = None
+
+
+def run_sync_iter(
+    user_id: str,
+    platforms: list[Platform] | None = None,
+    settings: Settings | None = None,
+    collectors: dict[Platform, Collector] | None = None,
+    client: Client | None = None,
+):
+    """Mesmo trabalho de `run_sync`, mas em forma de gerador: `yield`a um
+    `SyncEvent` por plataforma concluída (mais um evento inicial com a
+    lista de alvos), pra permitir progresso incremental via streaming.
+    Execução é sempre sequencial (sem paralelismo), então quem consome sabe
+    que a plataforma "atual" é sempre `targets[<qtd. de eventos recebidos>]`.
+    """
+    settings = settings or load_settings(user_id)
+    conn = client if client is not None else db.connect(settings)
+    collectors = collectors if collectors is not None else _collectors()
+    targets = platforms or list(collectors)
+
+    log.info("iniciando sync para %d plataforma(s): %s", len(targets), ", ".join(targets))
+    yield SyncEvent("targets", targets=list(targets))
+
+    total = len(targets)
+    for i, platform in enumerate(targets, start=1):
+        collector = collectors.get(platform)
+        if collector is None:
+            log.warning("[%d/%d] plataforma desconhecida: %s", i, total, platform)
+            result = PlatformResult(platform, "skipped", error="plataforma desconhecida")
+            yield SyncEvent("platform_done", platform=platform, index=i, total=total, result=result)
+            continue
+
+        if not collector.is_configured(settings):
+            log.info("[%d/%d] %s sem credenciais configuradas — pulando", i, total, platform)
+            result = PlatformResult(platform, "skipped")
+            yield SyncEvent("platform_done", platform=platform, index=i, total=total, result=result)
+            continue
+
+        started = datetime.now(UTC)
+        log.info("[%d/%d] > etapa: %s", i, total, platform)
+        try:
+            games = collector.fetch(settings)
+        except CollectorError as exc:
+            finished = datetime.now(UTC)
+            log.error("[%d/%d] %s falhou: %s", i, total, platform, exc)
+            db.record_sync_run(conn, user_id, platform, started, finished, "failed", None, str(exc))
+            result = PlatformResult(platform, "failed", error=str(exc))
+            yield SyncEvent("platform_done", platform=platform, index=i, total=total, result=result)
+            continue
+
+        for game in games:
+            game.completion_status = _infer_completion_status(game)
+            db.upsert_game(conn, user_id, game)
+        finished = datetime.now(UTC)
+        log.info("[%d/%d] %s OK: %d jogo(s)", i, total, platform, len(games))
+        db.record_sync_run(conn, user_id, platform, started, finished, "success", len(games))
+        result = PlatformResult(platform, "success", games_found=len(games))
+        yield SyncEvent("platform_done", platform=platform, index=i, total=total, result=result)
+
+    log.info("sync concluído.")
+
+
 def run_sync(
     user_id: str,
     platforms: list[Platform] | None = None,
@@ -76,43 +151,9 @@ def run_sync(
     collectors: dict[Platform, Collector] | None = None,
     client: Client | None = None,
 ) -> SyncReport:
-    settings = settings or load_settings(user_id)
-    conn = client if client is not None else db.connect(settings)
-    collectors = collectors if collectors is not None else _collectors()
-    targets = platforms or list(collectors)
-
-    log.info("iniciando sync para %d plataforma(s): %s", len(targets), ", ".join(targets))
-    results: list[PlatformResult] = []
-    for i, platform in enumerate(targets, start=1):
-        collector = collectors.get(platform)
-        if collector is None:
-            log.warning("[%d/%d] plataforma desconhecida: %s", i, len(targets), platform)
-            results.append(PlatformResult(platform, "skipped", error="plataforma desconhecida"))
-            continue
-
-        if not collector.is_configured(settings):
-            log.info("[%d/%d] %s sem credenciais configuradas — pulando", i, len(targets), platform)
-            results.append(PlatformResult(platform, "skipped"))
-            continue
-
-        started = datetime.now(UTC)
-        log.info("[%d/%d] > etapa: %s", i, len(targets), platform)
-        try:
-            games = collector.fetch(settings)
-        except CollectorError as exc:
-            finished = datetime.now(UTC)
-            log.error("[%d/%d] %s falhou: %s", i, len(targets), platform, exc)
-            db.record_sync_run(conn, user_id, platform, started, finished, "failed", None, str(exc))
-            results.append(PlatformResult(platform, "failed", error=str(exc)))
-            continue
-
-        for game in games:
-            game.completion_status = _infer_completion_status(game)
-            db.upsert_game(conn, user_id, game)
-        finished = datetime.now(UTC)
-        log.info("[%d/%d] %s OK: %d jogo(s)", i, len(targets), platform, len(games))
-        db.record_sync_run(conn, user_id, platform, started, finished, "success", len(games))
-        results.append(PlatformResult(platform, "success", games_found=len(games)))
-
-    log.info("sync concluído.")
+    results = [
+        event.result
+        for event in run_sync_iter(user_id, platforms, settings, collectors, client)
+        if event.type == "platform_done"
+    ]
     return SyncReport(results)

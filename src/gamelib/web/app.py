@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -13,7 +15,7 @@ from gamelib import db
 from gamelib.config import load_settings
 from gamelib.metadata import MetadataError, get_or_fetch_metadata
 from gamelib.models import PLATFORMS
-from gamelib.sync import run_sync
+from gamelib.sync import run_sync_iter
 from gamelib.web.auth import is_public_path, verify_session
 from gamelib.web.deps import Conn
 from gamelib.web.presentation import PLATFORM_META, STATUS_LABELS
@@ -119,6 +121,26 @@ def partial_games(
     )
 
 
+@app.get("/partials/stats")
+def partial_stats(request: Request, conn: Conn):
+    """Reassenta `#stats` com os números reais depois de um sync — chamado
+    pelo próprio JS de progresso (`sync-progress.js`) ao receber o evento
+    `complete` do stream, não por htmx declarativo.
+    """
+    user_id = request.state.user.id
+    stats = db.get_stats(conn, user_id)
+    return templates.TemplateResponse(
+        request,
+        "_stats.html",
+        {
+            "stats": stats,
+            "composition": _composition(stats),
+            "platforms": PLATFORMS,
+            "platform_meta": PLATFORM_META,
+        },
+    )
+
+
 def _game_context(conn, user_id: str, game_id: int) -> dict:
     row = db.get_game(conn, user_id, game_id)
     if row is None:
@@ -156,20 +178,39 @@ def game_modal(request: Request, conn: Conn, game_id: int):
     )
 
 
-@app.post("/sync")
-def sync_now(request: Request, conn: Conn):
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _sync_events(user_id: str, conn):
+    for event in run_sync_iter(user_id, client=conn):
+        if event.type == "targets":
+            yield _sse("targets", {"targets": event.targets})
+        elif event.type == "platform_done":
+            result = event.result
+            yield _sse(
+                "platform_done",
+                {
+                    "platform": event.platform,
+                    "index": event.index,
+                    "total": event.total,
+                    "status": result.status,
+                    "games_found": result.games_found,
+                    "error": result.error,
+                },
+            )
+    yield _sse("complete", {})
+
+
+@app.get("/sync/stream")
+def sync_stream(request: Request, conn: Conn):
     user_id = request.state.user.id
-    report = run_sync(user_id, client=conn)
-    stats = db.get_stats(conn, user_id)
-    response = templates.TemplateResponse(
-        request,
-        "_stats.html",
-        {
-            "stats": stats,
-            "composition": _composition(stats),
-            "sync_report": report,
-            "platform_meta": PLATFORM_META,
+    return StreamingResponse(
+        _sync_events(user_id, conn),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
         },
     )
-    response.headers["HX-Trigger"] = "sync-done"
-    return response

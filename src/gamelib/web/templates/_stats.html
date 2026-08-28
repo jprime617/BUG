@@ -5,18 +5,30 @@
       <h1 class="cover__title">Biblioteca de Jogos</h1>
       <p class="cover__subtitle">{{ stats.total_games }} jogo{{ 's' if stats.total_games != 1 else '' }} arquivado{{ 's' if stats.total_games != 1 else '' }} · {{ stats.total_playtime_minutes | playtime }} jogadas no total</p>
     </div>
-    <button
-      id="sync-btn"
-      class="sync-btn"
-      hx-post="/sync"
-      hx-target="#stats"
-      hx-swap="outerHTML"
-      hx-disabled-elt="this"
-    >
+    <button id="sync-btn" class="sync-btn" type="button">
       <span class="sync-btn__label">Sincronizar</span>
-      <span class="sync-btn__loading htmx-indicator">Sincronizando…</span>
     </button>
   </div>
+
+  <div id="sync-rally" class="sync-rally" hidden>
+    <div class="sync-rally__route">
+      {% for p in platforms %}
+      <div
+        class="sync-rally__stamp"
+        data-platform="{{ p }}"
+        data-label="{{ platform_meta[p].label }}"
+        data-status="pending"
+        style="--stamp-color: {{ platform_meta[p].color }}"
+      >
+        <span class="sync-rally__mark" aria-hidden="true">{{ platform_meta[p].short }}</span>
+        <span class="sync-rally__sublabel"></span>
+      </div>
+      {% if not loop.last %}<span class="sync-rally__segment"></span>{% endif %}
+      {% endfor %}
+    </div>
+    <span class="sync-rally__count"></span>
+  </div>
+  <p id="sync-rally-status" class="sr-only" aria-live="polite"></p>
 
   {% if composition %}
   <div class="gauge" role="img" aria-label="Distribuição da coleção por plataforma">
@@ -34,19 +46,5 @@
   </div>
   {% else %}
   <p class="empty-hint">Nenhum jogo importado ainda. Configure suas contas em <a href="/configuracoes">Configurações</a> e clique em "Sincronizar".</p>
-  {% endif %}
-
-  {% if sync_report %}
-  <div class="sync-report" role="status">
-    {% for r in sync_report.results %}
-    <span class="sync-report__item sync-report__item--{{ r.status }}">
-      {{ platform_meta[r.platform].label if r.platform in platform_meta else r.platform }}:
-      {%- if r.status == 'success' %} {{ r.games_found }} jogo(s)
-      {%- elif r.status == 'skipped' %} sem credenciais
-      {%- else %} falhou — {{ r.error }}
-      {%- endif %}
-    </span>
-    {% endfor %}
-  </div>
   {% endif %}
 </section>
