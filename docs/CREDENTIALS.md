@@ -1,17 +1,19 @@
 # Credenciais por plataforma
 
-**No sistema publicado (Vercel), as credenciais abaixo se preenchem pela
-tela `/configuracoes` (restrita ao admin) — não em `.env`.** O `.env` real
-só existe pra rodar localmente (`python tasks.py serve`); veja `env.example`
-pros nomes exatos, marcados como "fallback local". Independente de onde a
-credencial foi configurada, cada plataforma continua opcional — sem ela, a
-sincronização pula aquela plataforma automaticamente (não é erro).
+**No sistema publicado (Vercel), Steam/PSN/Xbox são credenciais por
+usuário: cada cliente preenche as suas em `/configuracoes` (logado com sua
+própria conta) — nunca em `.env`.** `RAWG_API_KEY` é a exceção: é uma
+credencial global, configurada só na Vercel (Project Settings > Environment
+Variables), não pela tela. O `.env` real só existe pra rodar localmente
+(`python tasks.py serve`); veja `env.example` pros nomes exatos. Independente
+de onde a credencial foi configurada, cada plataforma continua opcional —
+sem ela, a sincronização pula aquela plataforma automaticamente (não é erro).
 
 **Epic Games não tem versão hospedada.** A sincronização depende do CLI
 `legendary` instalado e autenticado interativamente na máquina — isso não
 roda em função serverless (sem filesystem persistente, sem sessão de
 terminal). Na Vercel a plataforma Epic sempre aparece como "pulado" no
-relatório de sync; pra sincronizar Epic, rode `python tasks.py sync`
+relatório de sync; pra sincronizar Epic, rode `python tasks.py sync <user_id>`
 localmente.
 
 ## Steam (API oficial)
@@ -84,8 +86,11 @@ The Legend of Zelda: Tears of the Kingdom,4200,playing,2023-05-12,
 Importe com:
 
 ```bash
-python tasks.py import-nintendo caminho/para/seus_jogos.csv
+python tasks.py import-nintendo <user_id> caminho/para/seus_jogos.csv
 ```
+
+`user_id` é o UUID do usuário no Supabase Auth (Authentication > Users) —
+os jogos importados vão pra biblioteca desse usuário.
 
 Rodar de novo com o mesmo CSV atualiza os jogos existentes (chave é o nome
 "slugificado"), não duplica.

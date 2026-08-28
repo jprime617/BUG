@@ -7,7 +7,11 @@ wrappers finos que chamam este arquivo. Uso:
     python tasks.py <alvo>
 
 Alvos: setup | clean | test | run-pipeline | lint | format | map | help |
-       sync | import-nintendo <csv> | serve
+       sync <user_id> | import-nintendo <user_id> <csv> | serve
+
+`sync`/`import-nintendo` escrevem na biblioteca de um usuário específico —
+`user_id` é o UUID do usuário no Supabase Auth (Authentication > Users no
+painel). Útil pra depuração/importação manual fora da tela /configuracoes.
 """
 
 from __future__ import annotations
@@ -103,9 +107,13 @@ def format_(argv: list[str]) -> int:
 
 
 def sync(argv: list[str]) -> int:
+    if not argv:
+        print("Uso: python tasks.py sync <user_id>")
+        return 2
+
     from gamelib.sync import run_sync
 
-    report = run_sync()
+    report = run_sync(argv[0])
     for result in report.results:
         detail = (
             f"{result.games_found} jogo(s)" if result.status == "success" else (result.error or "")
@@ -115,8 +123,8 @@ def sync(argv: list[str]) -> int:
 
 
 def import_nintendo(argv: list[str]) -> int:
-    if not argv:
-        print("Uso: python tasks.py import-nintendo <caminho.csv>")
+    if len(argv) < 2:
+        print("Uso: python tasks.py import-nintendo <user_id> <caminho.csv>")
         return 2
 
     from gamelib import db
@@ -124,17 +132,18 @@ def import_nintendo(argv: list[str]) -> int:
     from gamelib.collectors.nintendo_csv import import_csv
     from gamelib.config import load_settings
 
-    settings = load_settings()
+    user_id, csv_path = argv[0], argv[1]
+    settings = load_settings(user_id)
     try:
-        games = import_csv(Path(argv[0]), settings)
+        games = import_csv(Path(csv_path), settings)
     except CollectorError as exc:
         print(f"Falha na importacao: {exc}")
         return 1
 
     conn = db.connect(settings)
     for game in games:
-        db.upsert_game(conn, game)
-    print(f"Importados {len(games)} jogo(s) da Nintendo a partir de {argv[0]}.")
+        db.upsert_game(conn, user_id, game)
+    print(f"Importados {len(games)} jogo(s) da Nintendo a partir de {csv_path}.")
     return 0
 
 

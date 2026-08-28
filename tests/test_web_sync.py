@@ -9,18 +9,13 @@ from tests.fakes import FakeSupabaseClient
 from gamelib.web.app import app
 from gamelib.web.deps import get_conn
 
-ADMIN = SimpleNamespace(email="dono@example.com")
-VISITOR = SimpleNamespace(email="visitante@example.com")
+USER_A = SimpleNamespace(id="user-a", email="a@example.com")
+USER_B = SimpleNamespace(id="user-b", email="b@example.com")
 
 
 @pytest.fixture
 def fake_client() -> FakeSupabaseClient:
     return FakeSupabaseClient()
-
-
-@pytest.fixture(autouse=True)
-def _admin_email(monkeypatch):
-    monkeypatch.setenv("ADMIN_EMAIL", "dono@example.com")
 
 
 @pytest.fixture(autouse=True)
@@ -46,25 +41,37 @@ def test_sync_usuario_anonimo_redireciona_para_login(fake_client, monkeypatch):
     assert resp.headers["location"] == "/login"
 
 
-def test_sync_usuario_nao_admin_recebe_403(fake_client, monkeypatch):
-    client = _client(fake_client, monkeypatch, VISITOR)
-
-    resp = client.post("/sync")
-
-    assert resp.status_code == 403
-
-
-def test_sync_admin_roda_run_sync(fake_client, monkeypatch):
+def test_sync_usuario_logado_roda_run_sync_escopado_ao_proprio_id(fake_client, monkeypatch):
     called_with = {}
 
-    def fake_run_sync(*, client):
+    def fake_run_sync(user_id, *, client):
+        called_with["user_id"] = user_id
         called_with["client"] = client
         return SimpleNamespace(results=[], ok=True)
 
     monkeypatch.setattr("gamelib.web.app.run_sync", fake_run_sync)
-    client = _client(fake_client, monkeypatch, ADMIN)
+    client = _client(fake_client, monkeypatch, USER_A)
 
     resp = client.post("/sync")
 
     assert resp.status_code == 200
+    assert called_with["user_id"] == "user-a"
     assert called_with["client"] is fake_client
+
+
+def test_sync_de_um_usuario_nao_conta_jogos_do_outro_nas_estatisticas(fake_client, monkeypatch):
+    from gamelib import db
+    from gamelib.models import Game
+
+    db.upsert_game(fake_client, USER_B.id, Game(platform="steam", external_id="1", name="Portal"))
+
+    def fake_run_sync(user_id, *, client):
+        return SimpleNamespace(results=[], ok=True)
+
+    monkeypatch.setattr("gamelib.web.app.run_sync", fake_run_sync)
+    client = _client(fake_client, monkeypatch, USER_A)
+
+    resp = client.post("/sync")
+
+    assert resp.status_code == 200
+    assert "0 jogos arquivados" in resp.text

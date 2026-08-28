@@ -24,13 +24,14 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def upsert_game(conn: Client, game: Game) -> None:
+def upsert_game(conn: Client, user_id: str, game: Game) -> None:
     # `first_synced_at` fica de fora do payload de propósito: o PostgREST só
     # faz SET das colunas presentes no corpo do upsert, então omiti-la
     # preserva o valor original num conflito e deixa o DEFAULT now() do
     # banco preencher só no insert — equivalente ao ON CONFLICT DO UPDATE
     # SET explícito (sem first_synced_at) que isto tinha em SQLite.
     payload = {
+        "user_id": user_id,
         "platform": game.platform,
         "external_id": game.external_id,
         "name": game.name,
@@ -44,17 +45,18 @@ def upsert_game(conn: Client, game: Game) -> None:
         "raw_json": game.raw,
         "last_synced_at": _now(),
     }
-    conn.table("games").upsert(payload, on_conflict="platform,external_id").execute()
+    conn.table("games").upsert(payload, on_conflict="user_id,platform,external_id").execute()
 
 
 def list_games(
     conn: Client,
+    user_id: str,
     platform: str | None = None,
     query: str | None = None,
     status: str | None = None,
     sort: str = "name",
 ) -> list[dict]:
-    q = conn.table("games").select("*")
+    q = conn.table("games").select("*").eq("user_id", user_id)
     if platform:
         q = q.eq("platform", platform)
     if status:
@@ -74,10 +76,19 @@ def list_games(
     return q.execute().data
 
 
-def get_game(conn: Client, game_id: int) -> dict | None:
+def get_game(conn: Client, user_id: str, game_id: int) -> dict | None:
     # `.maybe_single()` faz `.execute()` devolver `None` puro (não uma
-    # resposta com `.data = None`) quando a query não acha linha.
-    response = conn.table("games").select("*").eq("id", game_id).maybe_single().execute()
+    # resposta com `.data = None`) quando a query não acha linha. Filtra por
+    # user_id também: impede um usuário de acessar o jogo de outro só
+    # adivinhando o id (IDOR).
+    response = (
+        conn.table("games")
+        .select("*")
+        .eq("id", game_id)
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
     return response.data if response is not None else None
 
 
@@ -113,9 +124,13 @@ def upsert_game_metadata(
     ).execute()
 
 
-def get_stats(conn: Client) -> dict[str, Any]:
+def get_stats(conn: Client, user_id: str) -> dict[str, Any]:
     rows = (
-        conn.table("games").select("platform, completion_status, playtime_minutes").execute().data
+        conn.table("games")
+        .select("platform, completion_status, playtime_minutes")
+        .eq("user_id", user_id)
+        .execute()
+        .data
     )
     total_games = len(rows)
     total_playtime = sum(r.get("playtime_minutes") or 0 for r in rows)
@@ -134,6 +149,7 @@ def get_stats(conn: Client) -> dict[str, Any]:
 
 def record_sync_run(
     conn: Client,
+    user_id: str,
     platform: str,
     started_at: datetime,
     finished_at: datetime,
@@ -143,6 +159,7 @@ def record_sync_run(
 ) -> None:
     conn.table("sync_runs").insert(
         {
+            "user_id": user_id,
             "platform": platform,
             "started_at": started_at.isoformat(),
             "finished_at": finished_at.isoformat(),

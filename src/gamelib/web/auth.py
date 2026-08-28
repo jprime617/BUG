@@ -3,16 +3,15 @@ cada request. Sem SDK client-side: login/registro/reset rodam inteiramente
 no servidor (FastAPI + supabase-py), consistente com o resto do app
 (server-rendered, sem framework JS/build step).
 
-Vitrine compartilhada: não há biblioteca por usuário — "admin" é só quem
-loga com o email em `ADMIN_EMAIL`, comparação feita aqui, nunca no Postgres
-(RLS não sabe nada sobre admin, só sobre autenticado-ou-não).
+Cada usuário tem sua própria biblioteca — RLS e as queries em `gamelib.db`
+escopam tudo por `user_id`; não há conceito de admin aqui.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, Response
+from fastapi import Depends, Request, Response
 from supabase_auth.errors import AuthError
 from supabase_auth.types import AuthResponse, Session, User
 
@@ -103,21 +102,6 @@ def get_current_user(request: Request) -> User | None:
 
 
 CurrentUser = Annotated[User | None, Depends(get_current_user)]
-
-
-def require_admin(user: CurrentUser) -> User:
-    settings = load_settings()
-    is_admin = (
-        user is not None
-        and settings.admin_email
-        and (user.email or "").lower() == settings.admin_email.lower()
-    )
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
-    return user
-
-
-Admin = Annotated[User, Depends(require_admin)]
 
 
 def set_session_cookies(response: Response, session: Session) -> None:

@@ -73,12 +73,13 @@ class SyncReport:
 
 
 def run_sync(
+    user_id: str,
     platforms: list[Platform] | None = None,
     settings: Settings | None = None,
     collectors: dict[Platform, Collector] | None = None,
     client: Client | None = None,
 ) -> SyncReport:
-    settings = settings or load_settings()
+    settings = settings or load_settings(user_id)
     conn = client if client is not None else db.connect(settings)
     collectors = collectors if collectors is not None else _collectors()
     targets = platforms or list(collectors)
@@ -104,17 +105,17 @@ def run_sync(
         except CollectorError as exc:
             finished = datetime.now(UTC)
             log.error("[%d/%d] %s falhou: %s", i, len(targets), platform, exc)
-            db.record_sync_run(conn, platform, started, finished, "failed", None, str(exc))
+            db.record_sync_run(conn, user_id, platform, started, finished, "failed", None, str(exc))
             results.append(PlatformResult(platform, "failed", error=str(exc)))
             continue
 
         for game in games:
             if game.platform != "nintendo":
                 game.completion_status = _infer_completion_status(game)
-            db.upsert_game(conn, game)
+            db.upsert_game(conn, user_id, game)
         finished = datetime.now(UTC)
         log.info("[%d/%d] %s OK: %d jogo(s)", i, len(targets), platform, len(games))
-        db.record_sync_run(conn, platform, started, finished, "success", len(games))
+        db.record_sync_run(conn, user_id, platform, started, finished, "success", len(games))
         results.append(PlatformResult(platform, "success", games_found=len(games)))
 
     log.info("sync concluído.")

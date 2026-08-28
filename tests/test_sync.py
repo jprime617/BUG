@@ -36,8 +36,12 @@ class _FakeUnconfigured:
         raise AssertionError("não deveria ser chamado se não configurado")
 
 
+USER_ID = "user-a"
+
+
 def test_run_sync_isola_falha_de_uma_plataforma_das_demais(settings, db_conn):
     report = run_sync(
+        USER_ID,
         settings=settings,
         collectors={"steam": _FakeOk(), "psn": _FakeBroken(), "xbox": _FakeUnconfigured()},
         client=db_conn,
@@ -51,7 +55,7 @@ def test_run_sync_isola_falha_de_uma_plataforma_das_demais(settings, db_conn):
     assert by_platform["xbox"].status == "skipped"
     assert report.ok is False
 
-    assert [r["name"] for r in db.list_games(db_conn)] == ["Portal"]
+    assert [r["name"] for r in db.list_games(db_conn, USER_ID)] == ["Portal"]
 
     sync_runs = db_conn.table("sync_runs").select("*").execute().data
     assert {(r["platform"], r["status"]) for r in sync_runs} == {
@@ -61,7 +65,7 @@ def test_run_sync_isola_falha_de_uma_plataforma_das_demais(settings, db_conn):
 
 
 def test_run_sync_com_todas_plataformas_ok_reporta_sucesso(settings, db_conn):
-    report = run_sync(settings=settings, collectors={"steam": _FakeOk()}, client=db_conn)
+    report = run_sync(USER_ID, settings=settings, collectors={"steam": _FakeOk()}, client=db_conn)
 
     assert report.ok is True
     assert report.results[0].status == "success"
@@ -108,9 +112,11 @@ class _FakeNintendo:
 
 
 def test_run_sync_infere_completion_status_a_partir_de_playtime_e_achievements(settings, db_conn):
-    run_sync(settings=settings, collectors={"steam": _FakeStatusVariants()}, client=db_conn)
+    run_sync(
+        USER_ID, settings=settings, collectors={"steam": _FakeStatusVariants()}, client=db_conn
+    )
 
-    by_id = {r["external_id"]: r["completion_status"] for r in db.list_games(db_conn)}
+    by_id = {r["external_id"]: r["completion_status"] for r in db.list_games(db_conn, USER_ID)}
     assert by_id == {
         "completo": "completed",
         "jogando": "playing",
@@ -120,7 +126,7 @@ def test_run_sync_infere_completion_status_a_partir_de_playtime_e_achievements(s
 
 
 def test_run_sync_nao_sobrescreve_completion_status_manual_do_nintendo(settings, db_conn):
-    run_sync(settings=settings, collectors={"nintendo": _FakeNintendo()}, client=db_conn)
+    run_sync(USER_ID, settings=settings, collectors={"nintendo": _FakeNintendo()}, client=db_conn)
 
-    row = db.list_games(db_conn)[0]
+    row = db.list_games(db_conn, USER_ID)[0]
     assert row["completion_status"] == "abandoned"

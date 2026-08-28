@@ -7,6 +7,11 @@ Este arquivo mantém o histórico das decisões críticas do projeto para que a 
 - resumo em até 3 linhas
 -->
 
+## [2026-08-28] Multi-tenant: biblioteca por usuário (fim da vitrine compartilhada)
+- `games`/`sync_runs`/`settings` ganham `user_id` (FK `auth.users`); toda leitura/escrita em `db.py`/`settings_store.py`/`sync.py` passa a exigir `user_id` e RLS troca `using (true)` por `using (auth.uid() = user_id)`.
+- Conceito de admin removido (`require_admin`/`ADMIN_EMAIL` fora): `/configuracoes` (Steam/PSN/Xbox) e `/sync` abrem pra qualquer usuário autenticado, escopados ao próprio id. `RAWG_API_KEY` continua a única credencial global, só via `.env`.
+- `get_game` passa a filtrar por dono (fecha IDOR de `/games/{id}`); CLI `sync`/`import-nintendo` ganham `<user_id>` posicional obrigatório.
+
 ## [2026-08-27] Migração pra Supabase (Auth + Postgres) + deploy na Vercel
 - `games`/`game_metadata`/`sync_runs` saem de SQLite local pra Postgres do Supabase (supabase-py/PostgREST) — vitrine compartilhada sem biblioteca por usuário; RLS ativo em todas as tabelas como defesa em profundidade (servidor sempre usa `service_role`).
 - Auth via Supabase Auth (cookie httpOnly, middleware fail-closed com allow-list); admin = comparação de email com `ADMIN_EMAIL`, não tabela de roles. Credenciais de plataforma (Steam/PSN/Xbox/RAWG) viram configurações dinâmicas cifradas (Fernet) em `settings`, editáveis via `/configuracoes` (admin-only), com fallback pro `.env` em dev local.

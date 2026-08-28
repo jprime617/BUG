@@ -37,8 +37,8 @@ def _patch_rawg(
 
 
 def test_busca_e_persiste_metadados_na_primeira_chamada(monkeypatch, db_conn):
-    db.upsert_game(db_conn, Game(platform="steam", external_id="1", name="Hades"))
-    game_id = db.list_games(db_conn)[0]["id"]
+    db.upsert_game(db_conn, "user-a", Game(platform="steam", external_id="1", name="Hades"))
+    game_id = db.list_games(db_conn, "user-a")[0]["id"]
 
     _patch_rawg(
         monkeypatch,
@@ -73,8 +73,8 @@ def test_busca_e_persiste_metadados_na_primeira_chamada(monkeypatch, db_conn):
 
 
 def test_falha_ao_buscar_sinopse_nao_impede_outros_metadados(monkeypatch, db_conn):
-    db.upsert_game(db_conn, Game(platform="steam", external_id="1", name="Hades"))
-    game_id = db.list_games(db_conn)[0]["id"]
+    db.upsert_game(db_conn, "user-a", Game(platform="steam", external_id="1", name="Hades"))
+    game_id = db.list_games(db_conn, "user-a")[0]["id"]
 
     def handler(request: httpx.Request) -> httpx.Response:
         tail = request.url.path.rsplit("/", 1)[-1]

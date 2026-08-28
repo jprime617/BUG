@@ -39,6 +39,7 @@ def _fernet() -> Fernet:
 
 def get_setting(
     key: str,
+    user_id: str,
     *,
     env_fallback: str | None = None,
     client: Client | None = None,
@@ -51,6 +52,7 @@ def get_setting(
         response = (
             resolved_client.table("settings")
             .select("value, encrypted")
+            .eq("user_id", user_id)
             .eq("key", key)
             .maybe_single()
             .execute()
@@ -74,6 +76,7 @@ def get_setting(
 def set_setting(
     key: str,
     value: str,
+    user_id: str,
     *,
     encrypted: bool = False,
     updated_by: str | None = None,
@@ -82,13 +85,14 @@ def set_setting(
     stored = _fernet().encrypt(value.encode()).decode() if encrypted else value
     client.table("settings").upsert(
         {
+            "user_id": user_id,
             "key": key,
             "value": stored,
             "encrypted": encrypted,
             "updated_by": updated_by,
             "updated_at": datetime.now(UTC).isoformat(),
         },
-        on_conflict="key",
+        on_conflict="user_id,key",
     ).execute()
 
 

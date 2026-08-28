@@ -14,7 +14,7 @@ from gamelib.config import load_settings
 from gamelib.metadata import MetadataError, get_or_fetch_metadata
 from gamelib.models import PLATFORMS
 from gamelib.sync import run_sync
-from gamelib.web.auth import Admin, is_public_path, verify_session
+from gamelib.web.auth import is_public_path, verify_session
 from gamelib.web.deps import Conn
 from gamelib.web.presentation import PLATFORM_META, STATUS_LABELS
 from gamelib.web.routes_auth import router as auth_router
@@ -60,9 +60,14 @@ def _composition(stats: dict) -> list[dict]:
     ]
 
 
-def _games(conn, platform: str, q: str, status: str, sort: str) -> list[dict]:
+def _games(conn, user_id: str, platform: str, q: str, status: str, sort: str) -> list[dict]:
     rows = db.list_games(
-        conn, platform=platform or None, query=q or None, status=status or None, sort=sort or "name"
+        conn,
+        user_id,
+        platform=platform or None,
+        query=q or None,
+        status=status or None,
+        sort=sort or "name",
     )
     return [db.row_to_dict(row) for row in rows]
 
@@ -76,14 +81,15 @@ def index(
     status: str = "",
     sort: str = "name",
 ):
-    stats = db.get_stats(conn)
+    user_id = request.state.user.id
+    stats = db.get_stats(conn, user_id)
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "stats": stats,
             "composition": _composition(stats),
-            "games": _games(conn, platform, q, status, sort),
+            "games": _games(conn, user_id, platform, q, status, sort),
             "platforms": PLATFORMS,
             "platform_meta": PLATFORM_META,
             "status_labels": STATUS_LABELS,
@@ -101,24 +107,25 @@ def partial_games(
     status: str = "",
     sort: str = "name",
 ):
+    user_id = request.state.user.id
     return templates.TemplateResponse(
         request,
         "_games_grid.html",
         {
-            "games": _games(conn, platform, q, status, sort),
+            "games": _games(conn, user_id, platform, q, status, sort),
             "platform_meta": PLATFORM_META,
             "status_labels": STATUS_LABELS,
         },
     )
 
 
-def _game_context(conn, game_id: int) -> dict:
-    row = db.get_game(conn, game_id)
+def _game_context(conn, user_id: str, game_id: int) -> dict:
+    row = db.get_game(conn, user_id, game_id)
     if row is None:
         return {"game": None, "metadata": None, "error": "Jogo não encontrado."}
 
     game = db.row_to_dict(row)
-    settings = load_settings()
+    settings = load_settings(user_id)
     metadata, error = None, None
     try:
         metadata = get_or_fetch_metadata(conn, game_id, game["name"], settings.rawg_api_key)
@@ -130,7 +137,7 @@ def _game_context(conn, game_id: int) -> dict:
 
 @app.get("/games/{game_id}")
 def game_detail(request: Request, conn: Conn, game_id: int):
-    ctx = _game_context(conn, game_id)
+    ctx = _game_context(conn, request.state.user.id, game_id)
     return templates.TemplateResponse(
         request,
         "games/detail.html",
@@ -141,7 +148,7 @@ def game_detail(request: Request, conn: Conn, game_id: int):
 
 @app.get("/games/{game_id}/modal")
 def game_modal(request: Request, conn: Conn, game_id: int):
-    ctx = _game_context(conn, game_id)
+    ctx = _game_context(conn, request.state.user.id, game_id)
     return templates.TemplateResponse(
         request,
         "games/_game_modal.html",
@@ -150,9 +157,10 @@ def game_modal(request: Request, conn: Conn, game_id: int):
 
 
 @app.post("/sync")
-def sync_now(request: Request, conn: Conn, _admin: Admin):
-    report = run_sync(client=conn)
-    stats = db.get_stats(conn)
+def sync_now(request: Request, conn: Conn):
+    user_id = request.state.user.id
+    report = run_sync(user_id, client=conn)
+    stats = db.get_stats(conn, user_id)
     response = templates.TemplateResponse(
         request,
         "_stats.html",

@@ -11,6 +11,17 @@
   <script src="/static/htmx.min.js" defer></script>
 </head>
 <body>
+  {% if request.state.user %}
+  <nav class="topbar">
+    <a class="topbar__brand" href="/">Biblioteca de Jogos</a>
+    <div class="topbar__links">
+      <a class="topbar__link" href="/configuracoes">Configurações</a>
+      <form class="topbar__logout" method="post" action="/logout">
+        <button type="submit" class="topbar__link topbar__link--button">Sair</button>
+      </form>
+    </div>
+  </nav>
+  {% endif %}
   {% block content %}{% endblock %}
 
   <dialog id="game-modal" class="game-modal">

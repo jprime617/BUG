@@ -12,7 +12,8 @@ from gamelib.models import Game
 from gamelib.web.app import app
 from gamelib.web.deps import get_conn
 
-_FAKE_USER = SimpleNamespace(email="dono@example.com")
+_FAKE_USER = SimpleNamespace(id="user-a", email="a@example.com")
+_OTHER_USER = SimpleNamespace(id="user-b", email="b@example.com")
 
 
 @pytest.fixture
@@ -32,9 +33,9 @@ def client(fake_client: FakeSupabaseClient, monkeypatch) -> TestClient:
     app.dependency_overrides.clear()
 
 
-def _seed_game(fake_client: FakeSupabaseClient) -> int:
-    upsert_game(fake_client, Game(platform="steam", external_id="1", name="Hades"))
-    return list_games(fake_client)[0]["id"]
+def _seed_game(fake_client: FakeSupabaseClient, user_id: str = _FAKE_USER.id) -> int:
+    upsert_game(fake_client, user_id, Game(platform="steam", external_id="1", name="Hades"))
+    return list_games(fake_client, user_id)[0]["id"]
 
 
 def _patch_rawg(
@@ -115,6 +116,15 @@ def test_pagina_de_detalhe_usa_cache_na_segunda_chamada(client, fake_client, mon
 
 def test_pagina_de_detalhe_jogo_inexistente_retorna_404(client):
     resp = client.get("/games/999")
+
+    assert resp.status_code == 404
+    assert "não encontrado" in resp.text.lower()
+
+
+def test_pagina_de_detalhe_jogo_de_outro_usuario_retorna_404(client, fake_client):
+    game_id = _seed_game(fake_client, user_id=_OTHER_USER.id)
+
+    resp = client.get(f"/games/{game_id}")
 
     assert resp.status_code == 404
     assert "não encontrado" in resp.text.lower()

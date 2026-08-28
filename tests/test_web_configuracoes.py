@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from tests.fakes import FakeSupabaseClient
@@ -10,18 +9,13 @@ from tests.fakes import FakeSupabaseClient
 from gamelib.web.app import app
 from gamelib.web.deps import get_conn
 
-ADMIN = SimpleNamespace(email="dono@example.com")
-VISITOR = SimpleNamespace(email="visitante@example.com")
+USER_A = SimpleNamespace(id="user-a", email="a@example.com")
+USER_B = SimpleNamespace(id="user-b", email="b@example.com")
 
 
 @pytest.fixture
 def fake_client() -> FakeSupabaseClient:
     return FakeSupabaseClient()
-
-
-@pytest.fixture(autouse=True)
-def _admin_email(monkeypatch):
-    monkeypatch.setenv("ADMIN_EMAIL", "dono@example.com")
 
 
 @pytest.fixture(autouse=True)
@@ -56,51 +50,34 @@ def test_configuracoes_usuario_anonimo_redireciona_para_login(fake_client, monke
     assert resp.headers["location"] == "/login"
 
 
-def test_configuracoes_usuario_nao_admin_recebe_403(fake_client, monkeypatch):
-    client = _client(fake_client, monkeypatch, VISITOR)
-
-    resp = client.get("/configuracoes")
-
-    assert resp.status_code == 403
-
-
-def test_configuracoes_admin_renderiza_formulario(fake_client, monkeypatch):
-    client = _client(fake_client, monkeypatch, ADMIN)
+def test_configuracoes_usuario_logado_renderiza_formulario(fake_client, monkeypatch):
+    client = _client(fake_client, monkeypatch, USER_A)
 
     resp = client.get("/configuracoes")
 
     assert resp.status_code == 200
-    assert "RAWG API Key" in resp.text
+    assert "Steam API Key" in resp.text
     assert "não configurado" in resp.text.lower()
-
-
-def test_configuracoes_admin_configurado_via_env_mostra_status_ok(fake_client, monkeypatch):
-    monkeypatch.setenv("RAWG_API_KEY", "chave-de-teste-1234")
-    client = _client(fake_client, monkeypatch, ADMIN)
-
-    resp = client.get("/configuracoes")
-
-    assert "configurado" in resp.text.lower()
-    assert "1234" in resp.text  # últimos 4 caracteres mascarados
 
 
 def test_configuracoes_salvar_grava_via_settings_store(fake_client, monkeypatch):
     calls = []
     monkeypatch.setattr(
         "gamelib.web.routes_settings.settings_store.set_setting",
-        lambda key, value, **kw: calls.append((key, value, kw)),
+        lambda key, value, user_id, **kw: calls.append((key, value, user_id, kw)),
     )
-    client = _client(fake_client, monkeypatch, ADMIN)
+    client = _client(fake_client, monkeypatch, USER_A)
 
-    resp = client.post("/configuracoes", data={"rawg_api_key": "nova-chave"})
+    resp = client.post("/configuracoes", data={"steam_api_key": "nova-chave"})
 
     assert resp.status_code == 200
     assert "Configurações salvas" in resp.text
     assert calls == [
         (
-            "rawg_api_key",
+            "steam_api_key",
             "nova-chave",
-            {"encrypted": True, "updated_by": "dono@example.com", "client": fake_client},
+            "user-a",
+            {"encrypted": True, "updated_by": "a@example.com", "client": fake_client},
         )
     ]
 
@@ -109,41 +86,40 @@ def test_configuracoes_salvar_ignora_campos_vazios(fake_client, monkeypatch):
     calls = []
     monkeypatch.setattr(
         "gamelib.web.routes_settings.settings_store.set_setting",
-        lambda key, value, **kw: calls.append(key),
+        lambda key, value, user_id, **kw: calls.append(key),
     )
-    client = _client(fake_client, monkeypatch, ADMIN)
+    client = _client(fake_client, monkeypatch, USER_A)
 
-    client.post("/configuracoes", data={"rawg_api_key": "", "steam_api_key": "  "})
+    client.post("/configuracoes", data={"steam_api_key": "", "steam_id64": "  "})
 
     assert calls == []
 
 
-def test_testar_conexao_rawg_sucesso(fake_client, monkeypatch):
-    monkeypatch.setenv("RAWG_API_KEY", "chave-valida")
+def test_configuracoes_usuario_nao_ve_credencial_configurada_por_outro(fake_client, monkeypatch):
+    from cryptography.fernet import Fernet
 
-    def fake_get(*args, **kwargs):
-        return httpx.Response(200, json={"results": []})
+    monkeypatch.setenv("SETTINGS_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
-    monkeypatch.setattr(httpx, "get", fake_get)
-    client = _client(fake_client, monkeypatch, ADMIN)
+    client_b = _client(fake_client, monkeypatch, USER_B)
+    client_b.post("/configuracoes", data={"steam_api_key": "chave-da-usuaria-b"})
 
-    resp = client.post("/configuracoes/testar/rawg")
+    client_a = _client(fake_client, monkeypatch, USER_A)
+    resp = client_a.get("/configuracoes")
 
-    assert resp.status_code == 200
-    assert "settings-test-result__badge--ok" in resp.text
+    assert "não configurado" in resp.text.lower()
 
 
-def test_testar_conexao_rawg_sem_chave_mostra_erro(fake_client, monkeypatch):
-    client = _client(fake_client, monkeypatch, ADMIN)
+def test_testar_conexao_steam_sem_credenciais_mostra_erro(fake_client, monkeypatch):
+    client = _client(fake_client, monkeypatch, USER_A)
 
-    resp = client.post("/configuracoes/testar/rawg")
+    resp = client.post("/configuracoes/testar/steam")
 
     assert resp.status_code == 200
     assert "settings-test-result__badge--erro" in resp.text
 
 
 def test_testar_conexao_integracao_desconhecida(fake_client, monkeypatch):
-    client = _client(fake_client, monkeypatch, ADMIN)
+    client = _client(fake_client, monkeypatch, USER_A)
 
     resp = client.post("/configuracoes/testar/inexistente")
 
